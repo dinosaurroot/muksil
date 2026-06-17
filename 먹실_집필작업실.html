@@ -1,0 +1,1598 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>먹실 · 장르소설 집필 작업실</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/static/pretendard.css">
+<style>
+:root{
+  --ink:#14161b;          /* 바탕(먹) */
+  --ink-2:#1b1e25;        /* 표면 */
+  --ink-3:#232730;        /* 카드/입력 */
+  --line:#2e3340;         /* 경계선 */
+  --line-soft:#262b35;
+  --paper:#ece6da;        /* 본문 글자(종이결) */
+  --paper-dim:#b9b3a6;
+  --mute:#878d99;         /* 보조 텍스트 */
+  --mute-2:#5c626e;
+  --celadon:#6fbfa8;      /* 청자/원고지 강조 */
+  --celadon-deep:#3f8a78;
+  --celadon-soft:rgba(111,191,168,.14);
+  --amber:#d9a86c;        /* 경고/초과 */
+  --rust:#c96a5a;         /* 위험/삭제 */
+  --radius:10px;
+  --radius-sm:7px;
+  --serif:'Nanum Myeongjo','Batang','AppleMyungjo','Noto Serif KR',serif;
+  --sans:'Pretendard','Pretendard Variable',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --shadow:0 1px 0 rgba(255,255,255,.02) inset, 0 8px 30px rgba(0,0,0,.35);
+}
+:root.light{
+  --ink:#f3efe6; --ink-2:#ece7db; --ink-3:#fbf8f1; --line:#d8d1c2; --line-soft:#e2dccf;
+  --paper:#23262d; --paper-dim:#54595f; --mute:#6b7078; --mute-2:#9aa0a8;
+  --celadon:#3f8a78; --celadon-deep:#2c6557; --celadon-soft:rgba(63,138,120,.12);
+  --shadow:0 1px 0 rgba(255,255,255,.5) inset, 0 8px 24px rgba(120,110,90,.18);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--sans);
+  background:var(--ink);
+  color:var(--paper);
+  font-size:14px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  display:flex;
+  overflow:hidden;
+}
+button{font-family:inherit;cursor:pointer;color:inherit;background:none;border:none}
+input,textarea,select{font-family:inherit;color:inherit}
+::selection{background:var(--celadon-soft)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:var(--mute-2)}
+
+/* ============ 사이드바 ============ */
+#sidebar{
+  width:230px;flex:0 0 230px;height:100%;
+  background:var(--ink-2);
+  border-right:1px solid var(--line);
+  display:flex;flex-direction:column;
+  z-index:20;
+}
+.brand{
+  padding:18px 18px 14px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid var(--line-soft);
+}
+.brand .mark{
+  width:30px;height:30px;border-radius:8px;flex:0 0 30px;
+  background:
+    linear-gradient(135deg,var(--celadon-deep),var(--celadon));
+  position:relative;box-shadow:0 4px 12px rgba(63,138,120,.4);
+}
+.brand .mark::before,.brand .mark::after{
+  content:"";position:absolute;background:rgba(255,255,255,.55)
+}
+.brand .mark::before{left:50%;top:5px;bottom:5px;width:1px;transform:translateX(-.5px)}
+.brand .mark::after{top:50%;left:5px;right:5px;height:1px;transform:translateY(-.5px)}
+.brand h1{font-size:16px;font-weight:800;letter-spacing:-.02em}
+.brand h1 small{display:block;font-size:10.5px;font-weight:500;color:var(--mute);letter-spacing:.04em;margin-top:1px}
+
+.work-switch{padding:12px 14px 6px}
+.work-switch label{font-size:10.5px;color:var(--mute);letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:6px}
+.work-switch select{
+  width:100%;padding:9px 10px;border-radius:var(--radius-sm);
+  background:var(--ink-3);border:1px solid var(--line);font-size:13px;font-weight:600;
+  appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23878d99' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center;
+}
+
+nav{padding:8px 10px;flex:1;overflow-y:auto}
+nav .navitem{
+  width:100%;display:flex;align-items:center;gap:11px;
+  padding:9px 11px;border-radius:var(--radius-sm);
+  font-size:13.5px;font-weight:600;color:var(--mute);
+  text-align:left;transition:background .12s,color .12s;
+}
+nav .navitem svg{width:17px;height:17px;flex:0 0 17px;opacity:.85}
+nav .navitem:hover{background:var(--ink-3);color:var(--paper)}
+nav .navitem.active{background:var(--celadon-soft);color:var(--celadon)}
+nav .navitem .count{margin-left:auto;font-size:11px;font-weight:700;color:var(--mute-2)}
+nav .navitem.active .count{color:var(--celadon)}
+
+.side-foot{padding:12px 14px;border-top:1px solid var(--line-soft);display:flex;flex-direction:column;gap:8px}
+.db-state{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--mute)}
+.db-dot{width:7px;height:7px;border-radius:50%;background:var(--mute-2);flex:0 0 7px}
+.db-dot.saved{background:var(--celadon)}
+.db-dot.dirty{background:var(--amber)}
+.db-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-foot .row{display:flex;gap:6px}
+.minibtn{
+  flex:1;padding:7px;border-radius:6px;background:var(--ink-3);border:1px solid var(--line);
+  font-size:11.5px;font-weight:600;color:var(--mute);display:flex;align-items:center;justify-content:center;gap:5px;
+}
+.minibtn:hover{color:var(--paper);border-color:var(--mute-2)}
+.minibtn svg{width:13px;height:13px}
+
+/* ============ 메인 ============ */
+#main{flex:1;height:100%;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{
+  height:54px;flex:0 0 54px;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:14px;padding:0 22px;
+  background:var(--ink);
+}
+.topbar h2{font-size:16px;font-weight:800;letter-spacing:-.02em}
+.topbar .sub{font-size:12px;color:var(--mute);font-weight:500}
+.topbar .spacer{flex:1}
+.btn{
+  padding:8px 14px;border-radius:var(--radius-sm);font-size:12.5px;font-weight:700;
+  display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;transition:.12s;
+}
+.btn svg{width:15px;height:15px}
+.btn.primary{background:var(--celadon);color:#0e1814}
+.btn.primary:hover{background:#7fcdb6}
+.btn.ghost{border-color:var(--line);color:var(--mute)}
+.btn.ghost:hover{color:var(--paper);border-color:var(--mute-2)}
+.btn.danger{color:var(--rust)}
+.btn.danger:hover{background:rgba(201,106,90,.12)}
+
+.view{flex:1;overflow-y:auto;padding:26px 22px 60px}
+.view-inner{max-width:1080px;margin:0 auto}
+
+/* 빈 상태 */
+.empty{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:70px 20px;color:var(--mute);gap:14px;
+}
+.empty .ico{
+  width:56px;height:56px;border-radius:14px;background:var(--ink-3);border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;color:var(--mute-2);
+}
+.empty .ico svg{width:26px;height:26px}
+.empty h3{font-size:16px;color:var(--paper);font-weight:700}
+.empty p{font-size:13px;max-width:340px;line-height:1.6}
+
+/* 카드 */
+.card{
+  background:var(--ink-2);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);
+}
+.grid{display:grid;gap:14px}
+.section-title{font-size:12px;font-weight:700;color:var(--mute);letter-spacing:.05em;text-transform:uppercase;margin:0 0 12px}
+
+/* 대시보드 */
+.dash-top{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin-bottom:14px}
+@media(max-width:820px){.dash-top{grid-template-columns:1fr}}
+.work-hero{padding:22px}
+.work-hero .genre{font-size:11.5px;font-weight:700;color:var(--celadon);letter-spacing:.05em}
+.work-hero h3{font-family:var(--serif);font-size:25px;font-weight:800;margin:6px 0 4px;letter-spacing:-.01em;line-height:1.2}
+.work-hero .logline{font-size:13.5px;color:var(--paper-dim);line-height:1.6;margin-bottom:18px;font-style:italic}
+.metrics{display:flex;gap:26px;flex-wrap:wrap}
+.metric .n{font-family:var(--serif);font-size:26px;font-weight:800;line-height:1}
+.metric .n small{font-size:14px;color:var(--mute);font-weight:600;margin-left:2px}
+.metric .l{font-size:11.5px;color:var(--mute);margin-top:5px;font-weight:600}
+.metric .n.accent{color:var(--celadon)}
+
+.progress-card{padding:20px}
+.prog-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
+.prog-row .a{font-size:13px;font-weight:700}
+.prog-row .b{font-size:12px;color:var(--mute)}
+.bar{height:9px;background:var(--ink-3);border-radius:5px;overflow:hidden;border:1px solid var(--line-soft)}
+.bar > span{display:block;height:100%;background:linear-gradient(90deg,var(--celadon-deep),var(--celadon));border-radius:5px;transition:width .4s}
+
+/* 원고지 집필 달력(시그니처) */
+.calendar-card{padding:20px 20px 16px}
+.cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.cal-head .legend{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mute)}
+.cal-head .legend i{width:11px;height:11px;border-radius:2.5px;border:1px solid var(--line)}
+.wongoji{display:flex;gap:3px;overflow-x:auto;padding-bottom:4px}
+.wongoji .wk{display:flex;flex-direction:column;gap:3px}
+.cell{
+  width:13px;height:13px;border-radius:2.5px;background:var(--ink-3);
+  border:1px solid var(--line-soft);position:relative;
+}
+.cell.l1{background:rgba(111,191,168,.28);border-color:rgba(111,191,168,.3)}
+.cell.l2{background:rgba(111,191,168,.5);border-color:rgba(111,191,168,.5)}
+.cell.l3{background:rgba(111,191,168,.72);border-color:var(--celadon)}
+.cell.l4{background:var(--celadon);border-color:var(--celadon)}
+.cell:hover{outline:1px solid var(--celadon);outline-offset:1px}
+
+/* 리스트 */
+.list-row{
+  display:flex;align-items:center;gap:14px;padding:13px 16px;
+  border-bottom:1px solid var(--line-soft);transition:background .1s;cursor:pointer;
+}
+.list-row:last-child{border-bottom:none}
+.list-row:hover{background:var(--ink-3)}
+.list-row.active{background:var(--celadon-soft)}
+.chip{
+  font-size:10.5px;font-weight:700;padding:2.5px 8px;border-radius:20px;
+  background:var(--ink-3);color:var(--mute);border:1px solid var(--line);white-space:nowrap;
+}
+.chip.celadon{background:var(--celadon-soft);color:var(--celadon);border-color:transparent}
+.chip.amber{background:rgba(217,168,108,.14);color:var(--amber);border-color:transparent}
+.chip.rust{background:rgba(201,106,90,.14);color:var(--rust);border-color:transparent}
+
+/* ============ 집필 화면 ============ */
+.writer{display:flex;height:100%;overflow:hidden}
+.chap-list{
+  width:268px;flex:0 0 268px;border-right:1px solid var(--line);
+  display:flex;flex-direction:column;background:var(--ink-2);overflow:hidden;
+}
+.chap-list .head{padding:13px 14px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;justify-content:space-between}
+.chap-list .head span{font-size:12px;font-weight:700;color:var(--mute);letter-spacing:.04em}
+.chap-list .scroll{overflow-y:auto;flex:1}
+.chap-item{padding:12px 14px;border-bottom:1px solid var(--line-soft);cursor:pointer;transition:background .1s}
+.chap-item:hover{background:var(--ink-3)}
+.chap-item.active{background:var(--celadon-soft);box-shadow:inset 2.5px 0 0 var(--celadon)}
+.chap-item .t{display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.chap-item .no{font-size:11px;font-weight:800;color:var(--celadon);font-family:var(--serif)}
+.chap-item .ti{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.chap-item .m{font-size:11px;color:var(--mute);display:flex;gap:8px}
+
+.editor-pane{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.editor-head{padding:14px 24px 0;display:flex;flex-direction:column;gap:10px}
+.ti-input{
+  font-family:var(--serif);font-size:21px;font-weight:800;background:none;border:none;
+  width:100%;padding:4px 0;outline:none;letter-spacing:-.01em;
+}
+.ti-input::placeholder{color:var(--mute-2)}
+.ed-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:12px;border-bottom:1px solid var(--line-soft)}
+.ed-meta select{
+  padding:5px 9px;border-radius:6px;background:var(--ink-3);border:1px solid var(--line);
+  font-size:11.5px;font-weight:600;appearance:none;cursor:pointer;
+}
+.ed-meta .save-state{margin-left:auto;font-size:11.5px;color:var(--mute);display:flex;align-items:center;gap:6px}
+
+/* 분량 게이지(시그니처) */
+.gauge{padding:11px 24px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:14px}
+.gauge .nums{font-size:12px;font-weight:700;white-space:nowrap}
+.gauge .nums b{font-family:var(--serif);font-size:16px;color:var(--celadon)}
+.gauge .nums.over b{color:var(--amber)}
+.gauge .nums small{color:var(--mute);font-weight:600}
+.gauge .track{
+  flex:1;height:7px;background:var(--ink-3);border-radius:4px;position:relative;overflow:hidden;
+  border:1px solid var(--line-soft);
+}
+.gauge .track > span{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,var(--celadon-deep),var(--celadon));border-radius:4px;transition:width .25s}
+.gauge .track.over > span{background:linear-gradient(90deg,var(--celadon),var(--amber))}
+.gauge .nospace{font-size:11px;color:var(--mute);white-space:nowrap}
+
+.editor-body{flex:1;overflow-y:auto;padding:22px 24px 80px;display:flex;justify-content:center}
+#manuscript{
+  width:100%;max-width:760px;min-height:100%;background:none;border:none;outline:none;resize:none;
+  font-family:var(--serif);font-size:17px;line-height:2.05;color:var(--paper);
+  letter-spacing:.01em;
+}
+#manuscript::placeholder{color:var(--mute-2)}
+
+/* 폼/모달 */
+.overlay{position:fixed;inset:0;background:rgba(8,9,12,.62);backdrop-filter:blur(3px);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+.overlay.show{display:flex}
+.modal{
+  width:100%;max-width:520px;max-height:88vh;overflow-y:auto;background:var(--ink-2);
+  border:1px solid var(--line);border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.55);
+}
+.modal-head{padding:18px 22px 0;display:flex;align-items:center;justify-content:space-between}
+.modal-head h3{font-size:17px;font-weight:800;flex:1}
+.modal-body{padding:16px 22px}
+.modal-foot{padding:12px 22px 20px;display:flex;gap:9px;justify-content:flex-end}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11.5px;font-weight:700;color:var(--mute);margin-bottom:6px;letter-spacing:.03em}
+.field input,.field textarea,.field select{
+  width:100%;padding:10px 12px;border-radius:var(--radius-sm);background:var(--ink-3);
+  border:1px solid var(--line);font-size:13.5px;outline:none;transition:border .12s;
+}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--celadon)}
+.field textarea{resize:vertical;min-height:84px;line-height:1.6}
+.field select{appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23878d99' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center;}
+.field-row{display:flex;gap:12px}
+.field-row .field{flex:1}
+.checkline{display:flex;align-items:flex-start;gap:9px;font-size:13px;line-height:1.5;color:var(--paper-dim);cursor:pointer;margin-top:2px}
+.checkline input{width:auto;margin-top:2px;accent-color:var(--celadon)}
+.checkline b{color:var(--paper);font-weight:700}
+.checkline span{display:block;font-size:11.5px;color:var(--mute);margin-top:2px}
+.icon-x{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--mute)}
+.icon-x:hover{background:var(--ink-3);color:var(--paper)}
+
+/* 인물/설정 카드 그리드 */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:13px}
+.entity{padding:16px;cursor:pointer;transition:border .12s,transform .12s}
+.entity:hover{border-color:var(--mute-2);transform:translateY(-1px)}
+.entity .top{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.entity .av{width:34px;height:34px;border-radius:9px;flex:0 0 34px;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:800;font-size:16px;color:#0e1814;background:var(--celadon)}
+.entity h4{font-size:14.5px;font-weight:700}
+.entity .role{font-size:11px;color:var(--mute);font-weight:600}
+.entity p{font-size:12.5px;color:var(--paper-dim);line-height:1.6;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+
+/* 플롯 */
+.arc{margin-bottom:22px}
+.arc-title{font-family:var(--serif);font-size:15px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:9px}
+.arc-title::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--celadon)}
+.plot-item{display:flex;gap:13px;padding:13px 15px;cursor:pointer}
+.plot-item .dot{width:9px;height:9px;border-radius:50%;border:2px solid var(--mute-2);margin-top:5px;flex:0 0 9px}
+.plot-item .dot.doing{border-color:var(--amber);background:var(--amber)}
+.plot-item .dot.done{border-color:var(--celadon);background:var(--celadon)}
+.plot-item h4{font-size:13.5px;font-weight:700;margin-bottom:3px}
+.plot-item p{font-size:12.5px;color:var(--paper-dim);line-height:1.55}
+
+/* 토스트 */
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--ink-3);border:1px solid var(--line);padding:11px 18px;border-radius:10px;
+  font-size:13px;font-weight:600;box-shadow:0 12px 40px rgba(0,0,0,.5);opacity:0;
+  transition:.25s;z-index:200;pointer-events:none}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.err{border-color:var(--rust);color:var(--rust)}
+
+/* 시작 화면 */
+#splash{position:fixed;inset:0;background:var(--ink);z-index:300;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:26px;padding:24px}
+.splash-card{text-align:center;max-width:430px}
+.splash-mark{width:64px;height:64px;border-radius:16px;margin:0 auto 20px;background:linear-gradient(135deg,var(--celadon-deep),var(--celadon));position:relative;box-shadow:0 12px 40px rgba(63,138,120,.4)}
+.splash-mark::before,.splash-mark::after{content:"";position:absolute;background:rgba(255,255,255,.55)}
+.splash-mark::before{left:50%;top:11px;bottom:11px;width:1.5px;transform:translateX(-.75px)}
+.splash-mark::after{top:50%;left:11px;right:11px;height:1.5px;transform:translateY(-.75px)}
+.splash-card h1{font-family:var(--serif);font-size:30px;font-weight:800;letter-spacing:-.01em}
+.splash-card .tag{color:var(--mute);font-size:14px;margin:8px 0 28px;line-height:1.6}
+.splash-actions{display:flex;flex-direction:column;gap:10px}
+.splash-actions .btn{justify-content:center;padding:13px}
+.splash-note{font-size:11.5px;color:var(--mute-2);margin-top:18px;line-height:1.6}
+
+.hide{display:none !important}
+
+/* 햄버거 (모바일 전용) */
+.hamburger{width:34px;height:34px;border-radius:8px;display:none;align-items:center;justify-content:center;color:var(--paper);margin-left:-6px}
+.hamburger:hover{background:var(--ink-3)}
+.hamburger svg{width:21px;height:21px}
+#backdrop{position:fixed;inset:0;background:rgba(8,9,12,.5);z-index:15;display:none}
+#backdrop.show{display:block}
+
+/* 드라이브 폴더 칩 / 설정 */
+.kv{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute);padding:9px 11px;background:var(--ink-3);border:1px solid var(--line);border-radius:var(--radius-sm);margin-bottom:10px}
+.kv b{color:var(--paper);font-weight:700}
+.kv .grow{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seg{display:flex;background:var(--ink-3);border:1px solid var(--line);border-radius:var(--radius-sm);padding:3px;gap:3px}
+.seg button{flex:1;padding:8px;border-radius:5px;font-size:12.5px;font-weight:700;color:var(--mute)}
+.seg button.on{background:var(--celadon);color:#0e1814}
+.help{font-size:11.5px;color:var(--mute-2);line-height:1.55;margin-top:6px}
+.help a{color:var(--celadon)}
+/* 설정 그룹 (VS Code식 항목별 구분) */
+.set-group{padding:18px 0}
+.set-group:first-child{padding-top:4px}
+.set-group + .set-group{border-top:1px solid var(--line)}
+.set-group .set-head{font-size:12px;font-weight:700;color:var(--celadon);letter-spacing:.05em;text-transform:uppercase;margin:0 0 4px}
+.set-group .set-desc{font-size:11.5px;color:var(--mute-2);line-height:1.5;margin:0 0 14px}
+.drive-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--celadon);background:var(--celadon-soft);padding:3px 9px;border-radius:20px}
+
+@media(max-width:760px){
+  body{font-size:14px}
+  .hamburger{display:flex}
+  #sidebar{position:fixed;left:0;top:0;bottom:0;z-index:20;transform:translateX(-100%);transition:transform .22s ease;width:248px}
+  #sidebar.open{transform:none;box-shadow:0 0 50px rgba(0,0,0,.5)}
+  .topbar{padding:0 16px;gap:10px}
+  .view{padding:18px 14px 70px}
+  .dash-top{grid-template-columns:1fr}
+  /* 집필: 회차목록을 드로어로 */
+  .writer{position:relative}
+  .chap-list{position:absolute;left:0;top:0;bottom:0;z-index:12;width:84%;max-width:300px;
+    transform:translateX(-100%);transition:transform .22s ease}
+  .chap-list.open{transform:none;box-shadow:0 0 40px rgba(0,0,0,.5)}
+  .editor-head{padding:12px 16px 0}
+  .gauge{padding:10px 16px}
+  .editor-body{padding:18px 16px 90px}
+  #manuscript{font-size:16.5px;line-height:1.95}
+  .ti-input{font-size:18px}
+  .cards{grid-template-columns:1fr}
+  .modal{max-width:100%}
+  .metrics{gap:18px}
+}
+@media(max-width:760px){
+  .chaptoggle{display:inline-flex !important}
+}
+.chaptoggle{display:none;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;background:var(--ink-3);border:1px solid var(--line);font-size:12px;font-weight:700;color:var(--mute)}
+.chaptoggle svg{width:14px;height:14px}
+</style>
+</head>
+<body>
+
+<!-- 시작 화면 -->
+<div id="splash">
+  <div class="splash-card">
+    <div class="splash-mark"></div>
+    <h1>먹실</h1>
+    <p class="tag">한국식 장르소설을 위한 집필 작업실.<br>회차·인물·세계관·플롯이 하나의 파일에 담깁니다.</p>
+    <div class="splash-actions">
+      <button class="btn primary" id="btnNewDb">새 집필 파일 만들기 (이 기기)</button>
+      <button class="btn ghost" id="btnOpenDb">기존 파일 열기 (.db)</button>
+      <button class="btn ghost" id="btnDrive">☁ Google Drive로 작업하기</button>
+    </div>
+    <p class="splash-note" id="splashNote">데이터는 내 컴퓨터의 .db 파일, 또는 내가 지정한 Google Drive 폴더에만 저장돼요.</p>
+  </div>
+</div>
+
+<!-- 사이드바 -->
+<aside id="sidebar" class="hide">
+  <div class="brand">
+    <div class="mark"></div>
+    <h1>먹실<small>MUKSIL WORKROOM</small></h1>
+  </div>
+  <div class="work-switch">
+    <label>작품</label>
+    <select id="workSelect"></select>
+  </div>
+  <nav id="nav"></nav>
+  <div class="side-foot">
+    <div class="db-state">
+      <span class="db-dot" id="dbDot"></span>
+      <span class="db-name" id="dbName">파일 없음</span>
+    </div>
+    <div class="row">
+      <button class="minibtn" id="btnSave">저장</button>
+      <button class="minibtn" id="btnSettings">설정</button>
+      <button class="minibtn" id="btnTheme">테마</button>
+    </div>
+  </div>
+</aside>
+
+<!-- 메인 -->
+<main id="main" class="hide">
+  <div class="topbar">
+    <button class="hamburger" id="btnMenu" aria-label="메뉴">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <h2 id="viewTitle">대시보드</h2>
+    <span class="sub" id="viewSub"></span>
+    <span class="spacer"></span>
+    <div id="topActions"></div>
+  </div>
+  <div class="view" id="view"></div>
+</main>
+
+<div id="backdrop"></div>
+
+<!-- 모달 -->
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal"></div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/sql-wasm.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
+<script>
+/* ====================================================================
+   먹실 — 장르소설 집필 작업실 (단일 HTML / sql.js / File System Access)
+   ==================================================================== */
+"use strict";
+
+const SCHEMA_VERSION = 3;
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS works(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL, genre TEXT, platform TEXT,
+  logline TEXT, synopsis TEXT, status TEXT DEFAULT '구상중',
+  target_count INTEGER DEFAULT 0, daily_goal INTEGER DEFAULT 5500,
+  count_no_space INTEGER DEFAULT 1,
+  editor_preset TEXT DEFAULT '기본', editor_font TEXT DEFAULT 'serif',
+  editor_size INTEGER DEFAULT 17, editor_lh INTEGER DEFAULT 205, editor_width INTEGER DEFAULT 760,
+  created_at TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS chapters(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
+  no INTEGER, title TEXT, content TEXT DEFAULT '',
+  char_count INTEGER DEFAULT 0, char_count_ns INTEGER DEFAULT 0,
+  status TEXT DEFAULT '초고', memo TEXT,
+  published_at TEXT, created_at TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS characters(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
+  name TEXT, role TEXT DEFAULT '조연', oneliner TEXT, detail TEXT,
+  created_at TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS lore(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
+  category TEXT DEFAULT '세계관', title TEXT, content TEXT,
+  created_at TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS plots(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
+  arc TEXT DEFAULT '본편', sort INTEGER DEFAULT 0, title TEXT, content TEXT,
+  status TEXT DEFAULT '예정', created_at TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS notes(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
+  title TEXT, content TEXT, pinned INTEGER DEFAULT 0,
+  created_at TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS writing_log(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
+  date TEXT, chars INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
+`;
+
+let SQL = null;        // sql.js 모듈
+let db = null;         // 메모리상의 DB
+let fileHandle = null; // FileSystemFileHandle (로컬 모드)
+let dirty = false;
+let saveTimer = null;
+
+/* Drive 상태 */
+const cfg = loadCfg();           // {clientId, apiKey, folderId, folderName, mode}
+const gauth = { token:null, exp:0 };
+let tokenClient = null;
+let driveDbFileId = null;        // 현재 .db 의 Drive 파일 ID
+function loadCfg(){
+  try{ return Object.assign({clientId:'',apiKey:'',folderId:'',folderName:'',mode:'local'}, JSON.parse(localStorage.getItem('muksil-drive')||'{}')); }
+  catch(e){ return {clientId:'',apiKey:'',folderId:'',folderName:'',mode:'local'}; }
+}
+function saveCfg(){ try{ localStorage.setItem('muksil-drive', JSON.stringify(cfg)); }catch(e){} }
+
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const now = () => new Date().toISOString();
+const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const fmt = n => (n||0).toLocaleString('ko-KR');
+const supportsFS = 'showOpenFilePicker' in window;
+
+/* ---------- DB 헬퍼 ---------- */
+function all(sql, params=[]){
+  const stmt = db.prepare(sql); stmt.bind(params);
+  const rows=[]; while(stmt.step()) rows.push(stmt.getAsObject());
+  stmt.free(); return rows;
+}
+function one(sql, params=[]){ return all(sql,params)[0] || null; }
+function run(sql, params=[]){ db.run(sql, params); markDirty(); }
+function insert(sql, params=[]){ db.run(sql, params); markDirty(); return one('SELECT last_insert_rowid() AS id').id; }
+function ensureSchema(){
+  db.run(SCHEMA);
+  let changed = false;
+  const cols = new Set(all('PRAGMA table_info(works)').map(r=>r.name));
+  const addCol = (name, sql)=>{
+    if(cols.has(name)) return;
+    db.run(sql);
+    cols.add(name);
+    changed = true;
+  };
+  addCol('count_no_space', "ALTER TABLE works ADD COLUMN count_no_space INTEGER DEFAULT 1");
+  addCol('editor_preset', "ALTER TABLE works ADD COLUMN editor_preset TEXT DEFAULT '기본'");
+  addCol('editor_font', "ALTER TABLE works ADD COLUMN editor_font TEXT DEFAULT 'serif'");
+  addCol('editor_size', "ALTER TABLE works ADD COLUMN editor_size INTEGER DEFAULT 17");
+  addCol('editor_lh', "ALTER TABLE works ADD COLUMN editor_lh INTEGER DEFAULT 205");
+  addCol('editor_width', "ALTER TABLE works ADD COLUMN editor_width INTEGER DEFAULT 760");
+  const oldVer = +(one("SELECT value FROM meta WHERE key='schema_version'")?.value || 0);
+  if(oldVer < SCHEMA_VERSION){
+    db.run("INSERT OR REPLACE INTO meta(key,value) VALUES('schema_version',?)",[String(SCHEMA_VERSION)]);
+    changed = true;
+  }
+  if(changed) dirty = true;
+}
+function workUsesNoSpace(workId=state.workId){
+  const w = workId ? one('SELECT count_no_space FROM works WHERE id=?',[workId]) : null;
+  return !w || w.count_no_space !== 0;
+}
+
+/* ---------- 영속성 ---------- */
+function isDrive(){ return cfg.mode==='drive' && !!cfg.folderId; }
+function currentFilename(){ return (one("SELECT value FROM meta WHERE key='filename'")?.value) || 'novel.db'; }
+function markDirty(){
+  dirty = true; updateDbState();
+  clearTimeout(saveTimer);
+  const delay = isDrive() ? 5000 : 1800;
+  saveTimer = setTimeout(()=>{ if(fileHandle || isDrive()) writeToFile(true); }, delay);
+}
+async function writeToFile(silent){
+  if(!db) return;
+  const data = db.export();
+  try{
+    if(isDrive()){
+      if(!gauth.token){ if(!silent) toast('드라이브 연결이 필요해요. 설정에서 연결하세요.', true); return; }
+      const ss=$('#dbName'); if(ss) ss.textContent='동기화 중…';
+      await saveDbToDrive(data, currentFilename());
+      dirty=false; updateDbState();
+      if(!silent) toast('드라이브에 저장됨');
+    }else if(fileHandle){
+      const w = await fileHandle.createWritable();
+      await w.write(data); await w.close();
+      dirty=false; updateDbState();
+      if(!silent) toast('저장했어요');
+    }else{
+      downloadDb(data);
+      dirty=false; updateDbState();
+    }
+  }catch(e){ toast('저장 실패: '+e.message, true); updateDbState(); }
+}
+function downloadDb(data){
+  const blob = new Blob([data], {type:'application/octet-stream'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = currentFilename();
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function updateDbState(){
+  const dot = $('#dbDot'), name=$('#dbName');
+  if(!db){ dot.className='db-dot'; name.textContent='파일 없음'; return; }
+  dot.className = 'db-dot ' + (dirty?'dirty':'saved');
+  const loc = isDrive() ? '☁ ' : '';
+  const fn = isDrive() ? currentFilename() : (fileHandle ? fileHandle.name : (currentFilename()));
+  name.textContent = (dirty?'• ':'') + loc + fn;
+}
+
+/* ---------- 토스트 ---------- */
+let toastTimer;
+function toast(msg, err){
+  const t=$('#toast'); t.textContent=msg; t.className='show'+(err?' err':'');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.className='',2200);
+}
+
+/* ====================================================================
+   Google Drive (scope: drive.file — 앱이 만든/고른 항목만 접근)
+   ==================================================================== */
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
+function initTokenClient(){
+  if(tokenClient || !window.google || !google.accounts) return;
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: cfg.clientId, scope: DRIVE_SCOPE,
+    callback: ()=>{} // 호출 시점에 교체
+  });
+}
+function getToken(interactive){
+  return new Promise((resolve,reject)=>{
+    initTokenClient();
+    if(!tokenClient) return reject(new Error('GIS 라이브러리 로드 안 됨'));
+    tokenClient.callback = (resp)=>{
+      if(resp.error) return reject(new Error(resp.error));
+      gauth.token = resp.access_token;
+      gauth.exp = Date.now() + ((resp.expires_in||3600)-120)*1000;
+      resolve(resp.access_token);
+    };
+    tokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+  });
+}
+async function ensureToken(){
+  if(gauth.token && Date.now() < gauth.exp) return gauth.token;
+  return getToken(false);
+}
+async function connectDrive(){
+  if(!cfg.clientId){ toast('먼저 설정에서 Client ID를 입력하세요.', true); return false; }
+  await getToken(true);
+  return true;
+}
+async function driveApi(url, opts={}, retry=true){
+  await ensureToken();
+  opts.headers = Object.assign({}, opts.headers||{}, { Authorization:'Bearer '+gauth.token });
+  let r = await fetch(url, opts);
+  if(r.status===401 && retry){ gauth.token=null; await getToken(false); return driveApi(url, opts, false); }
+  if(!r.ok){ throw new Error('Drive '+r.status+': '+(await r.text()).slice(0,160)); }
+  return r;
+}
+
+/* === 범용 헬퍼 (폴더 안에서 폴더/파일 생성·읽기) === */
+async function driveCreateFolder(name, parentId){
+  const r = await driveApi('https://www.googleapis.com/drive/v3/files?fields=id,name', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ name, mimeType:'application/vnd.google-apps.folder', parents: parentId?[parentId]:undefined })
+  });
+  return r.json();
+}
+async function driveCreateFile(name, content, parentId, mimeType='application/octet-stream'){
+  const boundary = 'muksil'+Date.now();
+  const meta = { name, parents: parentId?[parentId]:undefined };
+  const body = new Blob([
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`,
+    JSON.stringify(meta),
+    `\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`,
+    content,
+    `\r\n--${boundary}--`
+  ]);
+  const r = await driveApi('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', {
+    method:'POST', headers:{'Content-Type':'multipart/related; boundary='+boundary}, body
+  });
+  return r.json();
+}
+async function driveUpdateFile(fileId, content, mimeType='application/octet-stream'){
+  const r = await driveApi(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&fields=id,name`, {
+    method:'PATCH', headers:{'Content-Type':mimeType}, body: content
+  });
+  return r.json();
+}
+async function driveReadFile(fileId){   // → Uint8Array
+  const r = await driveApi(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+  return new Uint8Array(await r.arrayBuffer());
+}
+async function driveReadText(fileId){ return new TextDecoder().decode(await driveReadFile(fileId)); }
+async function driveList(parentId){
+  const q = encodeURIComponent(`'${parentId}' in parents and trashed=false`);
+  const r = await driveApi(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType,modifiedTime,size)&orderBy=folder,name&pageSize=200`);
+  return (await r.json()).files || [];
+}
+async function driveFindByName(parentId, name){
+  return (await driveList(parentId)).find(f=>f.name===name && f.mimeType!=='application/vnd.google-apps.folder') || null;
+}
+
+/* === DB 저장/열기 === */
+async function saveDbToDrive(bytes, filename){
+  if(driveDbFileId){ await driveUpdateFile(driveDbFileId, bytes); return; }
+  const ex = await driveFindByName(cfg.folderId, filename);
+  if(ex){ driveDbFileId = ex.id; await driveUpdateFile(ex.id, bytes); }
+  else { const c = await driveCreateFile(filename, bytes, cfg.folderId); driveDbFileId = c.id; }
+}
+
+/* === Picker: 작업 폴더 선택 === */
+function pickDriveFolder(){
+  return new Promise((resolve)=>{
+    if(!window.gapi){ toast('Picker 로드 중… 잠시 후 다시 시도하세요.', true); return resolve(null); }
+    gapi.load('picker', ()=>{
+      const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+        .setSelectFolderEnabled(true).setMimeTypes('application/vnd.google-apps.folder');
+      const picker = new google.picker.PickerBuilder()
+        .addView(view).setOAuthToken(gauth.token).setDeveloperKey(cfg.apiKey)
+        .setTitle('작업 폴더 선택')
+        .setCallback(data=>{
+          if(data.action===google.picker.Action.PICKED){ const d=data.docs[0]; resolve({id:d.id, name:d.name}); }
+          else if(data.action===google.picker.Action.CANCEL){ resolve(null); }
+        }).build();
+      picker.setVisible(true);
+    });
+  });
+}
+
+/* ====================================================================
+   초기화 / 파일 열기·만들기
+   ==================================================================== */
+async function initSQL(){
+  if(SQL) return SQL;
+  SQL = await window.initSqlJs({ locateFile: f => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/${f}` });
+  return SQL;
+}
+
+async function createNewDb(){
+  await initSQL();
+  db = new SQL.Database();
+  ensureSchema();
+  db.run("INSERT INTO meta(key,value) VALUES('filename','novel.db')");
+  // 샘플 작품 1개로 시작
+  seedSample();
+  if(supportsFS){
+    try{
+      fileHandle = await window.showSaveFilePicker({
+        suggestedName:'내소설.db',
+        types:[{description:'집필 파일',accept:{'application/octet-stream':['.db']}}]
+      });
+      db.run("UPDATE meta SET value=? WHERE key='filename'",[fileHandle.name]);
+      await writeToFile(true);
+    }catch(e){ /* 사용자가 취소하면 메모리로 진행 */ }
+  }
+  enterApp();
+}
+
+async function openExistingDb(){
+  await initSQL();
+  let buf;
+  if(supportsFS){
+    try{
+      const [h] = await window.showOpenFilePicker({types:[{description:'집필 파일',accept:{'application/octet-stream':['.db']}}]});
+      fileHandle = h;
+      const f = await h.getFile();
+      buf = new Uint8Array(await f.arrayBuffer());
+    }catch(e){ return; }
+  }else{
+    buf = await pickFileFallback();
+    if(!buf) return;
+  }
+  try{
+    db = new SQL.Database(buf);
+    ensureSchema(); // 누락 테이블·컬럼 보강
+    if(!one("SELECT value FROM meta WHERE key='filename'"))
+      db.run("INSERT OR REPLACE INTO meta(key,value) VALUES('filename',?)",[fileHandle?fileHandle.name:'novel.db']);
+    enterApp();
+  }catch(e){ toast('파일을 열 수 없어요: '+e.message, true); }
+}
+
+function pickFileFallback(){
+  return new Promise(res=>{
+    const inp=document.createElement('input'); inp.type='file'; inp.accept='.db,.sqlite';
+    inp.onchange=async()=>{ const f=inp.files[0]; if(!f){res(null);return;} res(new Uint8Array(await f.arrayBuffer())); };
+    inp.click();
+  });
+}
+
+/* ---------- Drive: 새 파일 / 열기 ---------- */
+async function createNewDbOnDrive(){
+  if(!cfg.folderId){ toast('먼저 작업 폴더를 선택하세요.', true); return; }
+  await initSQL();
+  const fname = (prompt('새 집필 파일 이름', '내소설.db')||'').trim();
+  if(!fname) return;
+  const filename = fname.endsWith('.db')?fname:fname+'.db';
+  db = new SQL.Database();
+  ensureSchema();
+  db.run("INSERT INTO meta(key,value) VALUES('filename',?)",[filename]);
+  seedSample();
+  cfg.mode='drive'; saveCfg();
+  driveDbFileId = null; fileHandle = null;
+  try{ await writeToFile(true); }catch(e){ toast('드라이브 저장 실패: '+e.message,true); return; }
+  enterApp();
+}
+async function openDbFromDrive(){
+  if(!cfg.folderId){ toast('먼저 작업 폴더를 선택하세요.', true); return; }
+  await initSQL();
+  let files;
+  try{ files = (await driveList(cfg.folderId)).filter(f=>f.name.endsWith('.db')); }
+  catch(e){ toast('목록을 불러오지 못했어요: '+e.message,true); return; }
+  if(!files.length){ toast('이 폴더에 .db 파일이 없어요.', true); return; }
+  openModal(`<div class="modal-head"><h3>드라이브에서 열기</h3></div>
+    <div class="modal-body">
+      <div class="help" style="margin:0 0 10px">폴더: <b style="color:var(--celadon)">${esc(cfg.folderName||'')}</b></div>
+      <div class="card">${files.map(f=>`
+        <div class="list-row" onclick="loadDriveDb('${f.id}','${esc(f.name).replace(/'/g,"\\'")}')">
+          <div style="flex:1"><div style="font-weight:700">${esc(f.name)}</div>
+          <div style="font-size:11.5px;color:var(--mute)">${f.modifiedTime?new Date(f.modifiedTime).toLocaleString('ko-KR'):''}</div></div>
+          <span class="drive-pill">☁ Drive</span>
+        </div>`).join('')}</div>
+    </div>
+    <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">닫기</button></div>`);
+}
+async function loadDriveDb(fileId, name){
+  try{
+    const buf = await driveReadFile(fileId);
+    db = new SQL.Database(buf);
+    ensureSchema();
+    if(!one("SELECT value FROM meta WHERE key='filename'"))
+      db.run("INSERT OR REPLACE INTO meta(key,value) VALUES('filename',?)",[name]);
+    else db.run("UPDATE meta SET value=? WHERE key='filename'",[name]);
+    driveDbFileId = fileId; fileHandle = null; cfg.mode='drive'; saveCfg();
+    closeModal(); enterApp();
+  }catch(e){ toast('열기 실패: '+e.message, true); }
+}
+
+/* ---------- 설정 (Drive 연결) ---------- */
+function openSettings(){
+  const connected = !!gauth.token;
+  const w = (db && state.workId) ? one('SELECT * FROM works WHERE id=?',[state.workId]) : null;
+  const statusOpts = ['구상중','연재중','휴재','완결'];
+  const workGroup = w ? `
+    <div class="set-group">
+      <div class="set-head">작품</div>
+      <div class="set-desc">「${esc(w.title)}」의 집필 목표예요. 바꾸면 바로 저장됩니다.</div>
+      <div class="field-row">
+        <div class="field"><label>상태</label>
+          <select onchange="setWorkSetting('status',this.value)">${statusOpts.map(s=>`<option ${s===(w.status||'구상중')?'selected':''}>${s}</option>`).join('')}</select></div>
+        <div class="field"><label>목표 회차</label>
+          <input type="number" min="0" value="${esc(w.target_count||0)}" onchange="setWorkSetting('target_count',this.value)"></div>
+        <div class="field"><label>1회 목표 분량</label>
+          <input type="number" min="0" value="${esc(w.daily_goal||0)}" onchange="setWorkSetting('daily_goal',this.value)"></div>
+      </div>
+      <label class="checkline"><input type="checkbox" ${w.count_no_space!==0?'checked':''} onchange="setWorkSetting('count_no_space',this.checked?1:0)">
+        <div><b>글자수는 공백 제외로 계산</b><span>끄면 공백 포함 글자수로 분량·진행률·집필기록을 계산해요.</span></div>
+      </label>
+    </div>` : '';
+  const presetNames = [...Object.keys(COMPO_PRESETS), '직접'];
+  const compoGroup = w ? `
+    <div class="set-group">
+      <div class="set-head">조판 · 본문 표시</div>
+      <div class="set-desc">집필 화면 본문을 연재처 조판에 맞춰 보여줘요. 작품별로 저장돼요.</div>
+      <div class="field"><label>프리셋</label>
+        <select id="compoPreset" onchange="setCompoPreset(this.value)">${presetNames.map(n=>`<option ${n===(w.editor_preset||'기본')?'selected':''}>${n}</option>`).join('')}</select></div>
+      <div class="field-row">
+        <div class="field"><label>폰트</label>
+          <select onchange="setCompo('editor_font',this.value)">
+            <option value="serif" ${(w.editor_font||'serif')==='serif'?'selected':''}>바탕(명조)</option>
+            <option value="sans" ${w.editor_font==='sans'?'selected':''}>고딕</option></select></div>
+        <div class="field"><label>글자 크기(px)</label>
+          <input type="number" min="10" max="40" value="${esc(w.editor_size||17)}" onchange="setCompo('editor_size',this.value)"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>줄간격(%)</label>
+          <input type="number" min="100" max="320" step="5" value="${esc(w.editor_lh||205)}" onchange="setCompo('editor_lh',this.value)"></div>
+        <div class="field"><label>본문 폭(px)</label>
+          <input type="number" min="320" max="1200" step="20" value="${esc(w.editor_width||760)}" onchange="setCompo('editor_width',this.value)"></div>
+      </div>
+    </div>` : '';
+  openModal(`<div class="modal-head"><h3>설정</h3><button class="icon-x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      ${workGroup}
+      ${compoGroup}
+      <div class="set-group">
+        <div class="set-head">저장 · Google Drive</div>
+        <div class="set-desc">집필 파일을 어디에 저장할지 정해요.</div>
+        <div class="seg" style="margin-bottom:14px">
+          <button class="${cfg.mode!=='drive'?'on':''}" onclick="setMode('local')">이 기기에 저장</button>
+          <button class="${cfg.mode==='drive'?'on':''}" onclick="setMode('drive')">Google Drive</button>
+        </div>
+        ${field('OAuth Client ID','clientId',cfg.clientId)}
+        ${field('API Key (Picker용)','apiKey',cfg.apiKey)}
+        <div class="kv"><span>상태</span><span class="grow"></span>
+          <b style="color:${connected?'var(--celadon)':'var(--mute)'}">${connected?'연결됨':'연결 안 됨'}</b></div>
+        <div class="kv"><span>작업 폴더</span><span class="grow"><b>${cfg.folderName?esc(cfg.folderName):'미선택'}</b></span></div>
+        <div class="field-row" style="margin-top:4px">
+          <button class="btn ghost" style="flex:1;justify-content:center" onclick="saveDriveCfgThen('connect')">Drive 연결</button>
+          <button class="btn ghost" style="flex:1;justify-content:center" onclick="saveDriveCfgThen('folder')">폴더 선택</button>
+        </div>
+        <p class="help">drive.file 권한만 사용해요 — 먹실이 만들거나 직접 고른 항목에만 접근합니다. Client ID·API Key는 이 브라우저에만 저장돼요. 설정 방법은 함께 드린 안내(README) 참고.</p>
+        ${connected?`<div style="margin-top:10px"><button class="btn danger" onclick="disconnectDrive()">연결 해제</button></div>`:''}
+      </div>
+    </div>
+    <div class="modal-foot">
+      ${(!db && cfg.folderId && connected)?`<button class="btn primary" onclick="closeModal();driveStartOptions()">이 폴더로 시작 →</button>`:''}
+      <button class="btn ${(!db && cfg.folderId && connected)?'ghost':'primary'}" onclick="saveDriveCfgThen()">저장</button>
+    </div>`);
+}
+function setWorkSetting(key, val){
+  if(!db || !state.workId) return;
+  const cols = {status:'status', target_count:'target_count', daily_goal:'daily_goal', count_no_space:'count_no_space'};
+  if(!cols[key]) return;
+  const v = key==='status' ? val : key==='count_no_space' ? (+val?1:0) : Math.max(0, +val||0);
+  run(`UPDATE works SET ${cols[key]}=?, updated_at=? WHERE id=?`,[v, now(), state.workId]);
+  if(key==='count_no_space' && $('#manuscript')){
+    const {withSpace,noSpace} = countChars($('#manuscript').value);
+    edBaseCount = v ? noSpace : withSpace;
+  }
+  if(state.view==='dash') go('dash');
+  else if(state.view==='write'){
+    renderChapterList();
+    if($('#manuscript')) updateGauge();
+  }
+  toast('저장됨');
+}
+/* 연재처 조판 프리셋: 폰트(serif=바탕/sans=고딕)·글자크기(px)·줄간격(%)·본문폭(px) */
+const COMPO_PRESETS = {
+  '기본':      {font:'serif', size:17, lh:205, width:760},
+  '문피아풍':  {font:'serif', size:16, lh:140, width:580},
+  '노벨피아풍':{font:'sans',  size:16, lh:160, width:580},
+};
+function applyCompo(){
+  const ta = $('#manuscript'); if(!ta || !db || !state.workId) return;
+  const w = one('SELECT editor_font,editor_size,editor_lh,editor_width FROM works WHERE id=?',[state.workId]);
+  if(!w) return;
+  ta.style.fontFamily = (w.editor_font==='sans') ? 'var(--sans)' : 'var(--serif)';
+  ta.style.fontSize   = (w.editor_size||17)+'px';
+  ta.style.lineHeight = ((w.editor_lh||205)/100);
+  ta.style.maxWidth   = (w.editor_width||760)+'px';
+}
+function setCompoPreset(name){
+  if(!db || !state.workId) return;
+  const p = COMPO_PRESETS[name];
+  if(p) run(`UPDATE works SET editor_preset=?,editor_font=?,editor_size=?,editor_lh=?,editor_width=?,updated_at=? WHERE id=?`,
+        [name, p.font, p.size, p.lh, p.width, now(), state.workId]);
+  else   run(`UPDATE works SET editor_preset=?,updated_at=? WHERE id=?`,[name, now(), state.workId]);
+  applyCompo(); openSettings(); toast('조판: '+name);
+}
+function setCompo(key, val){
+  if(!db || !state.workId) return;
+  const cols = {editor_font:1, editor_size:1, editor_lh:1, editor_width:1};
+  if(!cols[key]) return;
+  const v = (key==='editor_font') ? (val==='sans'?'sans':'serif') : Math.max(1, +val||0);
+  run(`UPDATE works SET ${key}=?, editor_preset='직접', updated_at=? WHERE id=?`,[v, now(), state.workId]);
+  const sel = $('#compoPreset'); // 프리셋 표시를 '직접'으로 동기화
+  if(sel && sel.value!=='직접') sel.value='직접';
+  applyCompo();
+}
+function readCfgInputs(){
+  const v=formVals();
+  if('clientId' in v) cfg.clientId=v.clientId.trim();
+  if('apiKey' in v) cfg.apiKey=v.apiKey.trim();
+  saveCfg();
+}
+async function saveDriveCfgThen(action){
+  readCfgInputs();
+  if(action==='connect'){
+    const ok=await connectDrive().catch(e=>{toast(e.message,true);return false;});
+    if(ok){ toast('드라이브 연결됨'); openSettings(); }
+    return;
+  }
+  if(action==='folder'){
+    if(!gauth.token){ const ok=await connectDrive().catch(()=>false); if(!ok) return; }
+    const f=await pickDriveFolder();
+    if(f){ cfg.folderId=f.id; cfg.folderName=f.name; saveCfg(); driveDbFileId=null; toast('폴더 선택됨: '+f.name); openSettings(); }
+    return;
+  }
+  if(db) updateDbState();
+  closeModal(); toast('설정 저장됨');
+}
+function setMode(m){
+  if(m==='drive' && (!cfg.clientId)){ readCfgInputs(); }
+  cfg.mode=m; saveCfg();
+  if(db) updateDbState();
+  openSettings();
+}
+function disconnectDrive(){
+  if(gauth.token && window.google?.accounts?.oauth2){
+    try{ google.accounts.oauth2.revoke(gauth.token, ()=>{}); }catch(e){}
+  }
+  gauth.token=null; gauth.exp=0; driveDbFileId=null;
+  toast('연결 해제됨'); openSettings();
+}
+function openDriveStart(){
+  // 시작화면의 'Google Drive로 작업하기'
+  if(!cfg.clientId || !cfg.apiKey){ enterAppShellForSettings(); return; }
+  // 연결 → 폴더 확인 → 시작 옵션
+  (async()=>{
+    const ok = gauth.token || await connectDrive().catch(()=>false);
+    if(!ok) return;
+    if(!cfg.folderId){ const f=await pickDriveFolder(); if(!f) return; cfg.folderId=f.id; cfg.folderName=f.name; saveCfg(); }
+    driveStartOptions();
+  })();
+}
+function enterAppShellForSettings(){ openSettings(); }
+function driveStartOptions(){
+  openModal(`<div class="modal-head"><h3>Google Drive</h3></div>
+    <div class="modal-body">
+      <div class="kv"><span>작업 폴더</span><span class="grow"><b style="color:var(--celadon)">${esc(cfg.folderName||'')}</b></span>
+        <button class="btn ghost" style="padding:4px 9px" onclick="changeStartFolder()">변경</button></div>
+      <div class="splash-actions" style="margin-top:8px">
+        <button class="btn primary" onclick="closeModal();createNewDbOnDrive()">이 폴더에 새 집필 파일</button>
+        <button class="btn ghost" onclick="closeModal();openDbFromDrive()">이 폴더에서 열기</button>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">닫기</button></div>`);
+}
+async function changeStartFolder(){
+  const f=await pickDriveFolder(); if(f){ cfg.folderId=f.id; cfg.folderName=f.name; saveCfg(); driveDbFileId=null; driveStartOptions(); }
+}
+
+function enterApp(){
+  $('#splash').classList.add('hide');
+  $('#sidebar').classList.remove('hide');
+  $('#main').classList.remove('hide');
+  state.workId = (one('SELECT id FROM works ORDER BY id LIMIT 1')||{}).id || null;
+  refreshWorkSelect();
+  buildNav();
+  go('dash');
+  updateDbState();
+}
+
+/* ====================================================================
+   상태 / 라우팅
+   ==================================================================== */
+const state = { view:'dash', workId:null, chapterId:null };
+
+const VIEWS = [
+  {id:'dash',  label:'대시보드', icon:'M3 12l9-9 9 9M5 10v10h14V10', count:null},
+  {id:'write', label:'집필',    icon:'M12 19l7-7 3 3-7 7-3-3zM18 13l-1.5-1.5M2 22l5-1 12-12-4-4L3 17l-1 5z', count:'ch'},
+  {id:'cast',  label:'등장인물', icon:'M16 7a4 4 0 11-8 0 4 4 0 018 0zM3 21v-2a4 4 0 014-4h6a4 4 0 014 4v2', count:'ca'},
+  {id:'lore',  label:'세계관·설정', icon:'M12 2l9 4.9V17L12 22 3 17V6.9L12 2zM12 22V12M3 7l9 5 9-5', count:'lo'},
+  {id:'plot',  label:'플롯',    icon:'M9 5H5v14h14V9M9 5l6 6M9 5v6h6', count:'pl'},
+  {id:'note',  label:'메모',    icon:'M4 4h16v12l-4 4H4V4zM16 20v-4h4', count:'no'},
+];
+
+function buildNav(){
+  $('#nav').innerHTML = VIEWS.map(v=>`
+    <button class="navitem" data-view="${v.id}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${v.icon}"/></svg>
+      <span>${v.label}</span>${v.count?`<span class="count" data-cnt="${v.count}"></span>`:''}
+    </button>`).join('');
+  $$('#nav .navitem').forEach(b=>b.onclick=()=>{ go(b.dataset.view); if(window.innerWidth<=760) closeSidebar(); });
+}
+
+function updateNavCounts(){
+  const w = state.workId;
+  if(!w) return;
+  const c = {
+    ch: one('SELECT COUNT(*) n FROM chapters WHERE work_id=?',[w]).n,
+    ca: one('SELECT COUNT(*) n FROM characters WHERE work_id=?',[w]).n,
+    lo: one('SELECT COUNT(*) n FROM lore WHERE work_id=?',[w]).n,
+    pl: one('SELECT COUNT(*) n FROM plots WHERE work_id=?',[w]).n,
+    no: one('SELECT COUNT(*) n FROM notes WHERE work_id=?',[w]).n,
+  };
+  $$('#nav .count').forEach(el=>{ const k=el.dataset.cnt; el.textContent = c[k]||''; });
+}
+
+function go(view){
+  state.view = view;
+  $('#view').style.padding='';
+  $$('#nav .navitem').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+  const v = VIEWS.find(x=>x.id===view);
+  $('#viewTitle').textContent = v.label;
+  $('#viewSub').textContent = '';
+  $('#topActions').innerHTML = '';
+  updateNavCounts();
+  RENDER[view]();
+}
+
+function refreshWorkSelect(){
+  const works = all('SELECT id,title FROM works ORDER BY id');
+  $('#workSelect').innerHTML = works.map(w=>`<option value="${w.id}">${esc(w.title)}</option>`).join('')
+    + `<option value="__new">+ 새 작품…</option>`;
+  if(state.workId) $('#workSelect').value = state.workId;
+}
+$('#workSelect') && ($('#workSelect').onchange = e=>{
+  if(e.target.value==='__new'){ refreshWorkSelect(); openWorkForm(); return; }
+  state.workId = +e.target.value; state.chapterId=null;
+  go(state.view);
+});
+
+/* ====================================================================
+   글자수 / 집필기록
+   ==================================================================== */
+function countChars(text){
+  const noNL = (text||'').replace(/[\r\n]/g,'');
+  return { withSpace:[...noNL].length, noSpace:[...noNL.replace(/\s/g,'')].length };
+}
+function logWriting(workId, delta){
+  if(delta<=0) return;
+  const d=todayStr();
+  const row = one('SELECT id,chars FROM writing_log WHERE work_id=? AND date=?',[workId,d]);
+  if(row) run('UPDATE writing_log SET chars=? WHERE id=?',[row.chars+delta, row.id]);
+  else run('INSERT INTO writing_log(work_id,date,chars) VALUES(?,?,?)',[workId,d,delta]);
+}
+
+/* ====================================================================
+   모달 / 폼
+   ==================================================================== */
+function openModal(html){ $('#modal').innerHTML=html; $('#overlay').classList.add('show'); }
+function closeModal(){ $('#overlay').classList.remove('show'); }
+$('#overlay').onclick = e=>{ if(e.target.id==='overlay') closeModal(); };
+
+function field(label, name, value='', type='text', opts){
+  if(type==='textarea') return `<div class="field"><label>${label}</label><textarea name="${name}">${esc(value)}</textarea></div>`;
+  if(type==='select') return `<div class="field"><label>${label}</label><select name="${name}">${opts.map(o=>`<option ${o===value?'selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
+  return `<div class="field"><label>${label}</label><input name="${name}" type="${type}" value="${esc(value)}"></div>`;
+}
+function formVals(){ const o={}; $$('#modal [name]').forEach(el=>o[el.name]=el.value); return o; }
+
+/* ---------- 작품 폼 ---------- */
+function openWorkForm(id){
+  const w = id ? one('SELECT * FROM works WHERE id=?',[id]) : {};
+  openModal(`
+    <div class="modal-head"><h3>${id?'작품 정보 수정':'새 작품'}</h3></div>
+    <div class="modal-body">
+      ${field('제목','title',w.title)}
+      <div class="field-row">
+        ${field('장르','genre',w.genre||'','select',['판타지','현대판타지','무협','로맨스','로판','퓨전','SF','미스터리','라이트노벨','기타'])}
+        ${field('연재처','platform',w.platform||'','select',['미정','문피아','네이버시리즈','카카오페이지','노벨피아','리디','기타'])}
+      </div>
+      ${field('로그라인 (한 줄 소개)','logline',w.logline)}
+      ${field('시놉시스','synopsis',w.synopsis,'textarea')}
+      <p class="help">상태·목표 회차·목표 분량은 상단 <b>설정</b>의 ‘작품’ 항목에서 조절해요.</p>
+    </div>
+    <div class="modal-foot">
+      ${id?`<button class="btn danger" onclick="deleteWork(${id})">삭제</button>`:''}
+      <button class="btn ghost" onclick="closeModal()">취소</button>
+      <button class="btn primary" onclick="saveWork(${id||0})">저장</button>
+    </div>`);
+}
+function saveWork(id){
+  const v=formVals();
+  if(!v.title.trim()){ toast('제목을 입력해주세요',true); return; }
+  if(id){
+    run(`UPDATE works SET title=?,genre=?,platform=?,logline=?,synopsis=?,updated_at=? WHERE id=?`,
+      [v.title,v.genre,v.platform,v.logline,v.synopsis,now(),id]);
+  }else{
+    const nid=insert(`INSERT INTO works(title,genre,platform,logline,synopsis,created_at,updated_at) VALUES(?,?,?,?,?,?,?)`,
+      [v.title,v.genre,v.platform,v.logline,v.synopsis,now(),now()]);
+    state.workId=nid;
+  }
+  closeModal(); refreshWorkSelect(); go('dash'); toast('저장했어요');
+}
+function deleteWork(id){
+  if(!confirm('이 작품과 모든 회차·설정이 삭제됩니다. 계속할까요?')) return;
+  ['chapters','characters','lore','plots','notes','writing_log'].forEach(t=>run(`DELETE FROM ${t} WHERE work_id=?`,[id]));
+  run('DELETE FROM works WHERE id=?',[id]);
+  state.workId=(one('SELECT id FROM works ORDER BY id LIMIT 1')||{}).id||null;
+  closeModal(); refreshWorkSelect(); go('dash');
+}
+
+/* ====================================================================
+   대시보드
+   ==================================================================== */
+const RENDER = {};
+RENDER.dash = ()=>{
+  $('#topActions').innerHTML = `${state.workId?`<button class="btn ghost" onclick="openWorkForm(${state.workId})">작품 수정</button>`:''}<button class="btn primary" onclick="openWorkForm()">＋ 새 작품</button>`;
+  if(!state.workId){
+    $('#view').innerHTML = emptyState('아직 작품이 없어요','첫 작품을 만들면 회차·인물·세계관을 한곳에서 관리할 수 있어요.','새 작품 만들기','openWorkForm()');
+    return;
+  }
+  const w = one('SELECT * FROM works WHERE id=?',[state.workId]);
+  const chN = one('SELECT COUNT(*) n FROM chapters WHERE work_id=?',[w.id]).n;
+  const countCol = w.count_no_space===0 ? 'char_count' : 'char_count_ns';
+  const totalChars = one(`SELECT COALESCE(SUM(${countCol}),0) s FROM chapters WHERE work_id=?`,[w.id]).s;
+  const today = one('SELECT COALESCE(SUM(chars),0) s FROM writing_log WHERE work_id=? AND date=?',[w.id,todayStr()]).s;
+  const streak = calcStreak(w.id);
+  const pct = w.target_count>0 ? Math.min(100, Math.round(chN/w.target_count*100)) : 0;
+  const goalPct = w.daily_goal>0 ? Math.min(100, Math.round(today/w.daily_goal*100)) : 0;
+
+  $('#view').innerHTML = `<div class="view-inner">
+    <div class="dash-top">
+      <div class="card work-hero">
+        <div class="genre">${esc(w.genre||'장르 미정')} · ${esc(w.platform||'연재처 미정')} · ${esc(w.status)}</div>
+        <h3>${esc(w.title)}</h3>
+        <div class="logline">${w.logline?esc(w.logline):'<span style="opacity:.5">로그라인을 적어보세요</span>'}</div>
+        <div class="metrics">
+          <div class="metric"><div class="n accent">${fmt(chN)}<small>화</small></div><div class="l">집필 회차</div></div>
+          <div class="metric"><div class="n">${fmt(totalChars)}<small>자</small></div><div class="l">누적 분량</div></div>
+          <div class="metric"><div class="n">${streak}<small>일</small></div><div class="l">연속 집필</div></div>
+        </div>
+      </div>
+      <div class="card progress-card">
+        <div class="prog-row"><span class="a">오늘 분량</span><span class="b">${fmt(today)} / ${fmt(w.daily_goal)}자</span></div>
+        <div class="bar"><span style="width:${goalPct}%"></span></div>
+        <div style="height:18px"></div>
+        <div class="prog-row"><span class="a">연재 진행</span><span class="b">${fmt(chN)} / ${w.target_count?fmt(w.target_count)+'화':'목표 미설정'}</span></div>
+        <div class="bar"><span style="width:${pct}%"></span></div>
+        <div style="margin-top:16px"><button class="btn ghost" style="width:100%;justify-content:center" onclick="go('write')">이어서 집필하기 →</button></div>
+      </div>
+    </div>
+    <div class="card calendar-card">
+      <div class="cal-head">
+        <span class="section-title" style="margin:0">집필 달력 · 최근 17주</span>
+        <span class="legend">적음 <i></i><i class="cell l1"></i><i class="cell l2"></i><i class="cell l3"></i><i class="cell l4"></i> 많음</span>
+      </div>
+      ${renderCalendar(w.id)}
+    </div>
+  </div>`;
+};
+
+function emptyState(title, desc, btnLabel, onclick){
+  return `<div class="empty">
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg></div>
+    <h3>${esc(title)}</h3><p>${esc(desc)}</p>
+    ${btnLabel?`<button class="btn primary" style="margin-top:6px" onclick="${onclick}">${esc(btnLabel)}</button>`:''}
+  </div>`;
+}
+
+function calcStreak(workId){
+  const days = new Set(all('SELECT DISTINCT date FROM writing_log WHERE work_id=? AND chars>0',[workId]).map(r=>r.date));
+  let s=0, d=new Date();
+  // 오늘 안 썼으면 어제부터 카운트
+  const t=todayStr(); if(!days.has(t)) d.setDate(d.getDate()-1);
+  while(true){
+    const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if(days.has(ds)){ s++; d.setDate(d.getDate()-1); } else break;
+  }
+  return s;
+}
+
+function renderCalendar(workId){
+  const logs = {}; all('SELECT date,SUM(chars) c FROM writing_log WHERE work_id=? GROUP BY date',[workId]).forEach(r=>logs[r.date]=r.c);
+  const weeks=17, cells=weeks*7;
+  const end=new Date(); end.setHours(0,0,0,0);
+  const start=new Date(end); start.setDate(start.getDate()-(cells-1));
+  // 주의 시작을 일요일로 정렬
+  start.setDate(start.getDate()-start.getDay());
+  let html='<div class="wongoji">';
+  let cur=new Date(start);
+  for(let wk=0; wk<weeks+1; wk++){
+    html+='<div class="wk">';
+    for(let dow=0; dow<7; dow++){
+      const ds=`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
+      const future = cur>end;
+      const c = logs[ds]||0;
+      let lvl=''; if(c>0) lvl=c<1000?'l1':c<3000?'l2':c<5500?'l3':'l4';
+      html+=`<div class="cell ${future?'':lvl}" title="${ds}${c?' · '+fmt(c)+'자':''}" style="${future?'opacity:.25':''}"></div>`;
+      cur.setDate(cur.getDate()+1);
+    }
+    html+='</div>';
+    if(cur>end && cur.getDay()===0) {} // 계속
+  }
+  return html+'</div>';
+}
+
+/* ====================================================================
+   집필 (회차 목록 + 에디터)
+   ==================================================================== */
+let edTimer=null, edBaseCount=0; // 저장 디바운스 / 마지막 저장 글자수(델타용)
+
+RENDER.write = ()=>{
+  if(!state.workId){ $('#view').innerHTML = emptyState('작품을 먼저 만들어주세요','집필은 작품 안의 회차로 관리돼요.','대시보드로',"go('dash')"); return; }
+  $('#view').style.padding='0';
+  $('#view').innerHTML = `<div class="writer">
+    <div class="chap-list">
+      <div class="head"><span>회차 ${one('SELECT COUNT(*) n FROM chapters WHERE work_id=?',[state.workId]).n}화</span>
+        <button class="btn primary" style="padding:5px 10px;font-size:11.5px" onclick="newChapter()">＋ 회차</button></div>
+      <div class="scroll" id="chapScroll"></div>
+    </div>
+    <div class="editor-pane" id="editorPane"></div>
+  </div>`;
+  renderChapterList();
+  const first = state.chapterId || (one('SELECT id FROM chapters WHERE work_id=? ORDER BY no DESC LIMIT 1',[state.workId])||{}).id;
+  if(first) openChapter(first); else renderEditorEmpty();
+};
+
+function renderChapterList(){
+  const rows = all('SELECT * FROM chapters WHERE work_id=? ORDER BY no',[state.workId]);
+  const countCol = workUsesNoSpace() ? 'char_count_ns' : 'char_count';
+  $('#chapScroll').innerHTML = rows.length ? rows.map(c=>`
+    <div class="chap-item ${c.id===state.chapterId?'active':''}" onclick="openChapter(${c.id})">
+      <div class="t"><span class="no">${c.no}화</span><span class="ti">${c.title?esc(c.title):'무제'}</span></div>
+      <div class="m"><span>${fmt(c[countCol])}자</span><span class="chip ${c.status==='발행'?'celadon':c.status==='퇴고'?'amber':''}" style="padding:1px 7px">${esc(c.status)}</span></div>
+    </div>`).join('') : `<div style="padding:24px 16px;color:var(--mute);font-size:12.5px;text-align:center">아직 회차가 없어요.<br>＋ 회차로 시작하세요.</div>`;
+}
+
+function renderEditorEmpty(){
+  $('#editorPane').innerHTML = `<div class="empty" style="margin:auto"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 19l7-7 3 3-7 7-3-3z"/></svg></div><h3>회차를 선택하세요</h3><p>왼쪽에서 회차를 고르거나 새 회차를 만들어 집필을 시작하세요.</p></div>`;
+}
+
+function newChapter(){
+  const nextNo = (one('SELECT COALESCE(MAX(no),0) m FROM chapters WHERE work_id=?',[state.workId]).m)+1;
+  const id = insert('INSERT INTO chapters(work_id,no,title,content,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',
+    [state.workId,nextNo,'','','초고',now(),now()]);
+  renderChapterList(); openChapter(id);
+}
+
+function openChapter(id){
+  saveChapter(true); // 이전 회차 즉시 저장
+  state.chapterId=id;
+  const c = one('SELECT * FROM chapters WHERE id=?',[id]);
+  if(!c) return renderEditorEmpty();
+  const w = one('SELECT daily_goal,count_no_space FROM works WHERE id=?',[state.workId]);
+  edBaseCount = (w.count_no_space===0 ? c.char_count : c.char_count_ns) || 0;
+  $('#editorPane').innerHTML = `
+    <div class="editor-head">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="chaptoggle" onclick="document.querySelector('.chap-list').classList.toggle('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>회차</button>
+        <input class="ti-input" id="edTitle" placeholder="${c.no}화 제목" value="${esc(c.title)}">
+      </div>
+      <div class="ed-meta">
+        <select id="edStatus">${['초고','퇴고','발행'].map(s=>`<option ${s===c.status?'selected':''}>${s}</option>`).join('')}</select>
+        <button class="btn ghost" style="padding:5px 10px" onclick="chapterMemo(${id})">메모</button>
+        <button class="btn danger" style="padding:5px 10px" onclick="deleteChapter(${id})">삭제</button>
+        <span class="save-state" id="saveState">저장됨</span>
+      </div>
+    </div>
+    <div class="gauge">
+      <div class="nums" id="gNums"><b>0</b><small> / ${fmt(w.daily_goal)}자</small></div>
+      <div class="track" id="gTrack"><span style="width:0%"></span></div>
+      <div class="nospace" id="gNospace">보조 0자</div>
+    </div>
+    <div class="editor-body"><textarea id="manuscript" placeholder="여기에 ${c.no}화를 써내려가세요…">${esc(c.content)}</textarea></div>`;
+  renderChapterList();
+  const ta=$('#manuscript');
+  applyCompo();
+  updateGauge();
+  ta.oninput = ()=>{ updateGauge(); $('#saveState').textContent='입력 중…'; clearTimeout(edTimer); edTimer=setTimeout(()=>saveChapter(),900); };
+  ta.onblur = ()=>saveChapter();
+  $('#edTitle').oninput = ()=>{ clearTimeout(edTimer); edTimer=setTimeout(()=>saveChapter(),900); };
+  $('#edStatus').onchange = ()=>saveChapter();
+  if(window.innerWidth<=760) document.querySelector('.chap-list')?.classList.remove('open');
+  else ta.focus();
+}
+
+function updateGauge(){
+  const w = one('SELECT daily_goal,count_no_space FROM works WHERE id=?',[state.workId]);
+  const {withSpace,noSpace} = countChars($('#manuscript').value);
+  const main = w.count_no_space===0 ? withSpace : noSpace;
+  const sub = w.count_no_space===0 ? noSpace : withSpace;
+  const subLabel = w.count_no_space===0 ? '공백제외' : '공백포함';
+  const pct = w.daily_goal>0 ? main/w.daily_goal*100 : 0;
+  const over = pct>=100;
+  $('#gNums').className = 'nums'+(over?' over':'');
+  $('#gNums').innerHTML = `<b>${fmt(main)}</b><small> / ${fmt(w.daily_goal)}자</small>`;
+  $('#gTrack').className = 'track'+(over?' over':'');
+  $('#gTrack').firstElementChild.style.width = Math.min(100,pct)+'%';
+  $('#gNospace').textContent = `${subLabel} ${fmt(sub)}자`;
+}
+
+function saveChapter(silent){
+  if(!state.chapterId || !$('#manuscript')) return;
+  const content = $('#manuscript').value;
+  const title = $('#edTitle').value;
+  const status = $('#edStatus').value;
+  const {withSpace,noSpace}=countChars(content);
+  const countNoSpace = workUsesNoSpace() ? 1 : 0;
+  const baseCount = countNoSpace ? noSpace : withSpace;
+  const delta = baseCount - edBaseCount;
+  run(`UPDATE chapters SET title=?,content=?,char_count=?,char_count_ns=?,status=?,updated_at=?,published_at=CASE WHEN ?='발행' AND published_at IS NULL THEN ? ELSE published_at END WHERE id=?`,
+    [title,content,withSpace,noSpace,status,now(),status,now(),state.chapterId]);
+  if(delta>0){ logWriting(state.workId, delta); edBaseCount=baseCount; }
+  else edBaseCount=baseCount;
+  if(!silent){ const ss=$('#saveState'); if(ss) ss.textContent='저장됨'; }
+  renderChapterList(); updateNavCounts();
+}
+
+function deleteChapter(id){
+  if(!confirm('이 회차를 삭제할까요?')) return;
+  run('DELETE FROM chapters WHERE id=?',[id]);
+  state.chapterId=null; RENDER.write();
+}
+
+function chapterMemo(id){
+  const c=one('SELECT memo FROM chapters WHERE id=?',[id]);
+  openModal(`<div class="modal-head"><h3>회차 메모</h3></div>
+    <div class="modal-body">${field('이 회차에 대한 메모 (복선, 수정사항 등)','memo',c.memo,'textarea')}</div>
+    <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">취소</button>
+    <button class="btn primary" onclick="run('UPDATE chapters SET memo=? WHERE id=?',[formVals().memo,${id}]);closeModal();toast('메모 저장')">저장</button></div>`);
+}
+
+/* ====================================================================
+   등장인물
+   ==================================================================== */
+RENDER.cast = ()=>{
+  if(!state.workId){ $('#view').innerHTML=emptyState('작품을 먼저 만들어주세요','',''); return; }
+  $('#topActions').innerHTML=`<button class="btn primary" onclick="openCastForm()">＋ 인물 추가</button>`;
+  const rows=all('SELECT * FROM characters WHERE work_id=? ORDER BY CASE role WHEN "주인공" THEN 0 WHEN "주연" THEN 1 WHEN "악역" THEN 2 ELSE 3 END, id',[state.workId]);
+  $('#view').innerHTML = `<div class="view-inner">${
+    rows.length ? `<div class="cards">${rows.map(c=>`
+      <div class="card entity" onclick="openCastForm(${c.id})">
+        <div class="top"><div class="av">${esc((c.name||'?').slice(0,1))}</div>
+          <div><h4>${esc(c.name||'무명')}</h4><div class="role">${esc(c.role)}</div></div></div>
+        <p>${c.oneliner?esc(c.oneliner):'<span style="opacity:.5">한 줄 설정을 적어보세요</span>'}</p>
+      </div>`).join('')}</div>`
+    : emptyState('등장인물이 없어요','주인공부터 조연·악역까지, 인물 설정을 모아두면 집필 중 빠르게 참고할 수 있어요.','첫 인물 추가','openCastForm()')
+  }</div>`;
+};
+function openCastForm(id){
+  const c=id?one('SELECT * FROM characters WHERE id=?',[id]):{};
+  openModal(`<div class="modal-head"><h3>${id?'인물 수정':'새 인물'}</h3></div>
+    <div class="modal-body">
+      <div class="field-row">${field('이름','name',c.name)}${field('역할','role',c.role||'조연','select',['주인공','주연','악역','조연','단역'])}</div>
+      ${field('한 줄 설정','oneliner',c.oneliner)}
+      ${field('상세 (외모·성격·관계·비밀 등)','detail',c.detail,'textarea')}
+    </div>
+    <div class="modal-foot">${id?`<button class="btn danger" onclick="run('DELETE FROM characters WHERE id=?',[${id}]);closeModal();go('cast')">삭제</button>`:''}
+      <button class="btn ghost" onclick="closeModal()">취소</button>
+      <button class="btn primary" onclick="saveCast(${id||0})">저장</button></div>`);
+}
+function saveCast(id){
+  const v=formVals();
+  if(id) run('UPDATE characters SET name=?,role=?,oneliner=?,detail=?,updated_at=? WHERE id=?',[v.name,v.role,v.oneliner,v.detail,now(),id]);
+  else insert('INSERT INTO characters(work_id,name,role,oneliner,detail,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',[state.workId,v.name,v.role,v.oneliner,v.detail,now(),now()]);
+  closeModal(); go('cast'); toast('저장했어요');
+}
+
+/* ====================================================================
+   세계관·설정
+   ==================================================================== */
+const LORE_CATS=['세계관','체계·능력','지역·세력','종족·집단','아이템','용어','연표'];
+RENDER.lore = ()=>{
+  if(!state.workId){ $('#view').innerHTML=emptyState('작품을 먼저 만들어주세요','',''); return; }
+  $('#topActions').innerHTML=`<button class="btn primary" onclick="openLoreForm()">＋ 설정 추가</button>`;
+  const rows=all('SELECT * FROM lore WHERE work_id=? ORDER BY category,id',[state.workId]);
+  if(!rows.length){ $('#view').innerHTML=`<div class="view-inner">${emptyState('세계관 설정이 없어요','마법 체계, 지역, 세력, 핵심 용어… 설정을 카테고리별로 정리해두세요.','첫 설정 추가','openLoreForm()')}</div>`; return; }
+  const byCat={}; rows.forEach(r=>{(byCat[r.category]=byCat[r.category]||[]).push(r)});
+  $('#view').innerHTML=`<div class="view-inner">${Object.entries(byCat).map(([cat,items])=>`
+    <div class="arc"><div class="arc-title">${esc(cat)} <span style="font-size:11px;color:var(--mute);font-weight:600">${items.length}</span></div>
+      <div class="card">${items.map(l=>`
+        <div class="list-row" onclick="openLoreForm(${l.id})">
+          <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13.5px;margin-bottom:2px">${esc(l.title||'무제')}</div>
+          <div style="font-size:12.5px;color:var(--paper-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.content||'')}</div></div>
+        </div>`).join('')}</div></div>`).join('')}</div>`;
+};
+function openLoreForm(id){
+  const l=id?one('SELECT * FROM lore WHERE id=?',[id]):{};
+  openModal(`<div class="modal-head"><h3>${id?'설정 수정':'새 설정'}</h3></div>
+    <div class="modal-body">
+      <div class="field-row">${field('카테고리','category',l.category||'세계관','select',LORE_CATS)}${field('제목','title',l.title)}</div>
+      ${field('내용','content',l.content,'textarea')}
+    </div>
+    <div class="modal-foot">${id?`<button class="btn danger" onclick="run('DELETE FROM lore WHERE id=?',[${id}]);closeModal();go('lore')">삭제</button>`:''}
+      <button class="btn ghost" onclick="closeModal()">취소</button>
+      <button class="btn primary" onclick="saveLore(${id||0})">저장</button></div>`);
+}
+function saveLore(id){
+  const v=formVals();
+  if(id) run('UPDATE lore SET category=?,title=?,content=?,updated_at=? WHERE id=?',[v.category,v.title,v.content,now(),id]);
+  else insert('INSERT INTO lore(work_id,category,title,content,created_at,updated_at) VALUES(?,?,?,?,?,?)',[state.workId,v.category,v.title,v.content,now(),now()]);
+  closeModal(); go('lore'); toast('저장했어요');
+}
+
+/* ====================================================================
+   플롯
+   ==================================================================== */
+RENDER.plot = ()=>{
+  if(!state.workId){ $('#view').innerHTML=emptyState('작품을 먼저 만들어주세요','',''); return; }
+  $('#topActions').innerHTML=`<button class="btn primary" onclick="openPlotForm()">＋ 플롯 추가</button>`;
+  const rows=all('SELECT * FROM plots WHERE work_id=? ORDER BY arc,sort,id',[state.workId]);
+  if(!rows.length){ $('#view').innerHTML=`<div class="view-inner">${emptyState('플롯이 없어요','편(아크)별로 주요 사건과 전개를 정리하면 장편 연재 흐름을 놓치지 않아요.','첫 플롯 추가','openPlotForm()')}</div>`; return; }
+  const byArc={}; rows.forEach(r=>{(byArc[r.arc]=byArc[r.arc]||[]).push(r)});
+  $('#view').innerHTML=`<div class="view-inner">${Object.entries(byArc).map(([arc,items])=>`
+    <div class="arc"><div class="arc-title">${esc(arc)}</div>
+      <div class="card">${items.map(p=>`
+        <div class="list-row plot-item" onclick="openPlotForm(${p.id})">
+          <div class="dot ${p.status==='완료'?'done':p.status==='집필중'?'doing':''}"></div>
+          <div style="flex:1;min-width:0"><h4>${esc(p.title||'무제')}</h4><p>${esc(p.content||'')}</p></div>
+        </div>`).join('')}</div></div>`).join('')}</div>`;
+};
+function openPlotForm(id){
+  const p=id?one('SELECT * FROM plots WHERE id=?',[id]):{};
+  openModal(`<div class="modal-head"><h3>${id?'플롯 수정':'새 플롯'}</h3></div>
+    <div class="modal-body">
+      <div class="field-row">${field('편 (아크)','arc',p.arc||'본편')}${field('상태','status',p.status||'예정','select',['예정','집필중','완료'])}</div>
+      ${field('제목','title',p.title)}
+      ${field('전개·사건','content',p.content,'textarea')}
+      ${field('정렬 순서','sort',p.sort||0,'number')}
+    </div>
+    <div class="modal-foot">${id?`<button class="btn danger" onclick="run('DELETE FROM plots WHERE id=?',[${id}]);closeModal();go('plot')">삭제</button>`:''}
+      <button class="btn ghost" onclick="closeModal()">취소</button>
+      <button class="btn primary" onclick="savePlot(${id||0})">저장</button></div>`);
+}
+function savePlot(id){
+  const v=formVals();
+  if(id) run('UPDATE plots SET arc=?,status=?,title=?,content=?,sort=?,updated_at=? WHERE id=?',[v.arc,v.status,v.title,v.content,+v.sort,now(),id]);
+  else insert('INSERT INTO plots(work_id,arc,status,title,content,sort,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',[state.workId,v.arc,v.status,v.title,v.content,+v.sort,now(),now()]);
+  closeModal(); go('plot'); toast('저장했어요');
+}
+
+/* ====================================================================
+   메모
+   ==================================================================== */
+RENDER.note = ()=>{
+  if(!state.workId){ $('#view').innerHTML=emptyState('작품을 먼저 만들어주세요','',''); return; }
+  $('#topActions').innerHTML=`<button class="btn primary" onclick="openNoteForm()">＋ 메모</button>`;
+  const rows=all('SELECT * FROM notes WHERE work_id=? ORDER BY pinned DESC,updated_at DESC,id DESC',[state.workId]);
+  $('#view').innerHTML=`<div class="view-inner">${
+    rows.length?`<div class="cards">${rows.map(n=>`
+      <div class="card entity" onclick="openNoteForm(${n.id})" style="border-color:${n.pinned?'var(--celadon)':'var(--line)'}">
+        <h4 style="margin-bottom:7px">${n.pinned?'📌 ':''}${esc(n.title||'무제')}</h4>
+        <p>${esc(n.content||'')}</p></div>`).join('')}</div>`
+    : emptyState('메모가 없어요','떠오른 아이디어, 설정 충돌, 독자 반응 등 가볍게 적어두세요.','첫 메모','openNoteForm()')
+  }</div>`;
+};
+function openNoteForm(id){
+  const n=id?one('SELECT * FROM notes WHERE id=?',[id]):{};
+  openModal(`<div class="modal-head"><h3>${id?'메모 수정':'새 메모'}</h3></div>
+    <div class="modal-body">
+      ${field('제목','title',n.title)}
+      ${field('내용','content',n.content,'textarea')}
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" name="pinned" ${n.pinned?'checked':''} style="width:auto"> 상단 고정</label>
+    </div>
+    <div class="modal-foot">${id?`<button class="btn danger" onclick="run('DELETE FROM notes WHERE id=?',[${id}]);closeModal();go('note')">삭제</button>`:''}
+      <button class="btn ghost" onclick="closeModal()">취소</button>
+      <button class="btn primary" onclick="saveNote(${id||0})">저장</button></div>`);
+}
+function saveNote(id){
+  const v=formVals(); const pinned=$('#modal [name=pinned]').checked?1:0;
+  if(id) run('UPDATE notes SET title=?,content=?,pinned=?,updated_at=? WHERE id=?',[v.title,v.content,pinned,now(),id]);
+  else insert('INSERT INTO notes(work_id,title,content,pinned,created_at,updated_at) VALUES(?,?,?,?,?,?)',[state.workId,v.title,v.content,pinned,now(),now()]);
+  closeModal(); go('note'); toast('저장했어요');
+}
+
+/* ====================================================================
+   샘플 (새 파일에 예시 작품 하나)
+   ==================================================================== */
+function seedSample(){
+  const wid=insert(`INSERT INTO works(title,genre,platform,logline,synopsis,status,target_count,daily_goal,created_at,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?)`,
+    ['새 작품','현대판타지','문피아','한 줄로 후킹하는 로그라인을 적어보세요.','전체 이야기의 흐름을 시놉시스에 정리해두면 연재가 흔들리지 않습니다.','구상중',300,5500,now(),now()]);
+  insert('INSERT INTO characters(work_id,name,role,oneliner,detail,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',
+    [wid,'주인공','주인공','평범하지만 한 가지 비밀을 가진 인물.','목표·결핍·성장 곡선을 적어두면 회차마다 일관성을 유지하기 좋아요.',now(),now()]);
+  insert('INSERT INTO lore(work_id,category,title,content,created_at,updated_at) VALUES(?,?,?,?,?,?)',
+    [wid,'체계·능력','능력 체계','작품의 핵심 규칙(파워 인플레이션 기준, 제약, 대가)을 한곳에 정리하세요.',now(),now()]);
+  insert('INSERT INTO plots(work_id,arc,sort,title,content,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
+    [wid,'1부 · 도입',0,'발단','주인공의 일상과 사건의 시작. 1~10화 분량을 배치해보세요.','예정',now(),now()]);
+  insert('INSERT INTO chapters(work_id,no,title,content,char_count,char_count_ns,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',
+    [wid,1,'프롤로그','',0,0,'초고',now(),now()]);
+}
+
+/* ====================================================================
+   부트스트랩
+   ==================================================================== */
+if(!supportsFS){
+  $('#splashNote').textContent='이 기기는 로컬 파일 저장이 제한돼요(폰/사파리 등). 아래 ☁ Google Drive로 작업하기를 권장해요. .db 파일은 내가 지정한 드라이브 폴더에만 저장됩니다.';
+}
+$('#btnNewDb').onclick = ()=>createNewDb().catch(e=>toast(e.message,true));
+$('#btnOpenDb').onclick = ()=>openExistingDb().catch(e=>toast(e.message,true));
+$('#btnDrive').onclick = ()=>openDriveStart();
+$('#btnSave').onclick = ()=>{ saveChapter(true); writeToFile(false); };
+$('#btnSettings').onclick = ()=>openSettings();
+$('#btnTheme').onclick = ()=>{
+  document.documentElement.classList.toggle('light');
+  try{ localStorage.setItem('muksil-theme', document.documentElement.classList.contains('light')?'light':'dark'); }catch(e){}
+};
+try{ if(localStorage.getItem('muksil-theme')==='light') document.documentElement.classList.add('light'); }catch(e){}
+
+/* 모바일 메뉴 (사이드바 드로어) */
+function closeSidebar(){ $('#sidebar').classList.remove('open'); $('#backdrop').classList.remove('show'); }
+$('#btnMenu').onclick = ()=>{ const s=$('#sidebar'); s.classList.toggle('open'); $('#backdrop').classList.toggle('show', s.classList.contains('open')); };
+$('#backdrop').onclick = ()=>{ closeSidebar(); $('.chap-list')?.classList.remove('open'); };
+
+// Ctrl/Cmd+S = 저장
+document.addEventListener('keydown', e=>{
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='s'){
+    e.preventDefault(); if(db){ saveChapter(true); writeToFile(false); }
+  }
+});
+// 앱 전환/백그라운드 시 자동 저장(모바일에서 중요)
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='hidden' && db && dirty){ saveChapter(true); writeToFile(true); }
+});
+// 미저장 경고
+window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue=''; } });
+
+</script>
+</body>
+</html>
