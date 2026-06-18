@@ -469,7 +469,7 @@ nav .navitem.active .count{color:var(--celadon)}
    ==================================================================== */
 "use strict";
 
-const APP_VERSION = 'v0.4.3';
+const APP_VERSION = 'v0.4.4';
 const APP_UPDATED = '2026-06-18';
 // ★ 기본 OAuth Client ID — 여기에 적어두면 모든 기기/브라우저에서 자동으로 채워져 재입력 불필요.
 //    Client ID는 비밀이 아닌 공개 식별자라 코드에 박아도 안전(로그인·동의는 각자 본인 구글 계정에서, 테스트 사용자만 통과).
@@ -878,8 +878,12 @@ function driveSettingsHtml(connected){
       <button class="btn ghost" style="flex:1;justify-content:center" onclick="saveDriveCfgThen('connect')">Drive 연결</button>
       <button class="btn primary" style="flex:1;justify-content:center" onclick="saveDriveCfgThen('autoFolder')">폴더 연결</button>
     </div>
-    <p class="help"><b>폴더 연결</b>을 누르면 Drive에 <b>Muksil</b> 폴더를 만들거나 찾아서 작업 폴더로 잡아요. 별도의 API Key 없이 Client ID 하나면 됩니다. Client ID는 이 브라우저에만 저장돼요.</p>
-    ${connected?`<div style="margin-top:10px"><button class="btn danger" onclick="disconnectDrive()">연결 해제</button></div>`:''}
+    <p class="help"><b>폴더 연결</b>을 누르면 Drive에 <b>Muksil</b> 폴더를 만들거나 찾아서 작업 폴더로 잡아요. 별도의 API Key 없이 Client ID 하나면 됩니다.</p>
+    <div class="field-row" style="margin-top:10px">
+      ${connected?`<button class="btn danger" style="flex:1;justify-content:center" onclick="disconnectDrive()">연결 해제</button>`:''}
+      <button class="btn ghost" style="flex:1;justify-content:center" onclick="resetApp()">초기화</button>
+    </div>
+    <p class="help" style="margin-top:6px"><b>초기화</b>는 연결·폴더 설정을 모두 지우고 첫 화면으로 돌아가요(모바일·PC 동일). 집필 파일(.db) 자체는 지워지지 않아요.</p>
   </div>`;
 }
 function openDriveSettings(){
@@ -1031,6 +1035,13 @@ function disconnectDrive(){
   }
   gauth.token=null; gauth.exp=0; driveDbFileId=null;
   toast('연결 해제됨'); settingsContext==='drive' ? openDriveSettings() : openSettings();
+}
+function resetApp(){
+  // 모바일·PC 공통 초기화: 연결/폴더/모드 등 설정을 비우고 첫 화면으로. .db 데이터는 건드리지 않음.
+  if(!confirm('설정을 초기화할까요?\n· Drive 연결과 폴더 연결이 해제돼요.\n· 집필 파일(.db) 자체는 지워지지 않아요.\n· 첫 화면으로 돌아가요.')) return;
+  try{ if(gauth.token && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(gauth.token, ()=>{}); }catch(e){}
+  try{ localStorage.removeItem('muksil-drive'); }catch(e){}
+  location.reload();   // 새로고침 시 loadCfg가 기본값(DEFAULT_CLIENT_ID 포함)으로 재설정
 }
 function openDriveStart(){
   // 시작화면의 'Google Drive로 작업하기'
