@@ -13,9 +13,9 @@
 7. **앱 버전 표시 갱신**: 기능/동작/UI를 수정하면 `먹실_집필작업실.html`의 `APP_VERSION`/`APP_UPDATED`도 함께 올릴 것. 첫 화면 버전 표시는 이 상수를 사용한다.
 
 ## 구조 요약
-- 단일 HTML: `<style>`(CSS 전체) + 마지막 `<script>`(앱 로직). 외부 스크립트 3개: sql.js 1.12.0, GIS(`gsi/client`), gapi(`api.js`).
+- 단일 HTML: `<style>`(CSS 전체) + 마지막 `<script>`(앱 로직). 외부 스크립트 2개: sql.js 1.12.0, GIS(`gsi/client`). (gapi/Picker는 제거됨.)
 - DB: sql.js(SQLite WASM), 메모리 인스턴스 `db`. 테이블: works/chapters/characters/lore/plots/notes/writing_log/meta.
-- 저장: 로컬(File System Access API) ↔ Google Drive(scope `drive.file`). 분기 = `isDrive()`. 전역 상태: `state`, `cfg`(localStorage `muksil-drive`), `gauth`(토큰, 메모리).
+- 저장: **작품 1개 = `.db` 파일 1개**(v0.5.0~). 작업 위치 = 로컬 폴더(`dirHandle`, File System Access) 또는 Drive 폴더(`cfg.folderId`, scope `drive`). 파일명=작품 제목. 분기 = `isDrive()`. 전역 상태: `state`, `cfg`(localStorage `muksil-drive`), `gauth`(토큰, 메모리), `dirHandle`(IndexedDB `muksil-fs`).
 - 라우팅: `VIEWS[]` → `go(view)` → `RENDER[view]()`. 렌더는 `innerHTML` 재생성(가상DOM 없음).
 
 ## 변경 후 검증 (반드시 실행)
