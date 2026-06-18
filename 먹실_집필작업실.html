@@ -268,7 +268,7 @@ nav .navitem.active .count{color:var(--celadon)}
 #manuscript::placeholder{color:var(--mute-2)}
 
 /* 폼/모달 */
-.overlay{position:fixed;inset:0;background:rgba(8,9,12,.62);backdrop-filter:blur(3px);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+.overlay{position:fixed;inset:0;background:rgba(8,9,12,.62);backdrop-filter:blur(3px);z-index:400;display:none;align-items:center;justify-content:center;padding:20px}
 .overlay.show{display:flex}
 .modal{
   width:100%;max-width:520px;max-height:88vh;overflow-y:auto;background:var(--ink-2);
@@ -323,7 +323,7 @@ nav .navitem.active .count{color:var(--celadon)}
 #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
   background:var(--ink-3);border:1px solid var(--line);padding:11px 18px;border-radius:10px;
   font-size:13px;font-weight:600;box-shadow:0 12px 40px rgba(0,0,0,.5);opacity:0;
-  transition:.25s;z-index:200;pointer-events:none}
+  transition:.25s;z-index:500;pointer-events:none}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 #toast.err{border-color:var(--rust);color:var(--rust)}
 
@@ -469,7 +469,7 @@ nav .navitem.active .count{color:var(--celadon)}
    ==================================================================== */
 "use strict";
 
-const APP_VERSION = 'v0.4.1';
+const APP_VERSION = 'v0.4.2';
 const APP_UPDATED = '2026-06-18';
 const SCHEMA_VERSION = 3;
 const SCHEMA = `
