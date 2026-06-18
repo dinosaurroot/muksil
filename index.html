@@ -468,7 +468,7 @@ nav .navitem.active .count{color:var(--celadon)}
    ==================================================================== */
 "use strict";
 
-const APP_VERSION = 'v0.5.0';
+const APP_VERSION = 'v0.5.1';
 const APP_UPDATED = '2026-06-18';
 // ★ 기본 OAuth Client ID — 여기에 적어두면 모든 기기/브라우저에서 자동으로 채워져 재입력 불필요.
 //    Client ID는 비밀이 아닌 공개 식별자라 코드에 박아도 안전(로그인·동의는 각자 본인 구글 계정에서, 테스트 사용자만 통과).
@@ -609,7 +609,26 @@ function workUsesNoSpace(workId=state.workId){
 
 /* ---------- 영속성 ---------- */
 function isDrive(){ return cfg.mode==='drive' && !!cfg.folderId; }
-function currentFilename(){ return (one("SELECT value FROM meta WHERE key='filename'")?.value) || 'novel.db'; }
+function currentFilename(){ return (one("SELECT value FROM meta WHERE key='filename'")?.value) || 'novel.db.gz'; }
+
+/* gzip 압축/해제 (브라우저 내장 CompressionStream) — 저장은 항상 압축, 읽기는 매직바이트 자동감지 */
+function isGzip(b){ return b && b.length>2 && b[0]===0x1f && b[1]===0x8b; }
+async function gzipBytes(bytes){
+  const stream = new Response(new Blob([bytes])).body.pipeThrough(new CompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function gunzipBytes(bytes){
+  const stream = new Response(new Blob([bytes])).body.pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function exportBytes(){            // db → 저장용(압축) 바이트
+  const raw = db.export();
+  try{ return await gzipBytes(raw); }
+  catch(e){ return raw; }               // CompressionStream 미지원 등: 미압축 폴백
+}
+async function importBytes(bytes){       // 파일 바이트 → db용(필요 시 해제)
+  return isGzip(bytes) ? await gunzipBytes(bytes) : bytes;
+}
 function markDirty(){
   dirty = true; updateDbState();
   clearTimeout(saveTimer);
@@ -618,8 +637,8 @@ function markDirty(){
 }
 async function writeToFile(silent){
   if(!db) return;
-  const data = db.export();
   try{
+    const data = await exportBytes();
     if(isDrive()){
       if(!gauth.token){ if(!silent) toast('드라이브 연결이 필요해요. 설정에서 연결하세요.', true); return; }
       const ss=$('#dbName'); if(ss) ss.textContent='동기화 중…';
@@ -649,8 +668,7 @@ function updateDbState(){
   if(!db){ dot.className='db-dot'; name.textContent='파일 없음'; return; }
   dot.className = 'db-dot ' + (dirty?'dirty':'saved');
   const loc = isDrive() ? '☁ ' : '';
-  const fn = isDrive() ? currentFilename() : (fileHandle ? fileHandle.name : (currentFilename()));
-  name.textContent = (dirty?'• ':'') + loc + fn;
+  name.textContent = (dirty?'• ':'') + loc + titleFromFile(currentFilename());
 }
 
 /* ---------- 토스트 ---------- */
@@ -783,7 +801,7 @@ async function saveDbToDrive(bytes, filename){
 /* ====================================================================
    초기화 / 스토리지 (작품 1개 = .db 파일 1개)
    - 작업 위치: 로컬 폴더(dirHandle) 또는 Drive 폴더(cfg.folderId)
-   - 파일명 = 작품 제목 + .db
+   - 파일명 = 작품 제목 + .db.gz (저장 시 gzip 압축, 읽을 땐 매직바이트 자동감지)
    ==================================================================== */
 async function initSQL(){
   if(SQL) return SQL;
@@ -794,20 +812,21 @@ function sanitizeName(title){
   const s = (title||'').trim().replace(/[\\/:*?"<>|]/g,' ').replace(/\s+/g,' ').trim();
   return s || '무제';
 }
-function workFileName(title){ return sanitizeName(title) + '.db'; }
-function titleFromFile(name){ return String(name||'').replace(/\.db$/i,''); }
+function workFileName(title){ return sanitizeName(title) + '.db.gz'; }   // 저장은 항상 gzip → .db.gz
+function titleFromFile(name){ return String(name||'').replace(/\.db\.gz$/i,'').replace(/\.db$/i,''); }
+function isWorkFile(name){ const n=String(name||'').toLowerCase(); return n.endsWith('.db.gz') || n.endsWith('.db'); }
 function hasLocation(){ return isDrive() || !!dirHandle; }
 
-/* 현재 작업 위치의 작품(.db) 목록 */
+/* 현재 작업 위치의 작품 파일(.db/.db.gz) 목록 */
 async function listWorkFiles(){
   if(isDrive()){
-    const fs = (await driveList(cfg.folderId)).filter(f=>f.name.toLowerCase().endsWith('.db') && f.mimeType!=='application/vnd.google-apps.folder');
+    const fs = (await driveList(cfg.folderId)).filter(f=>isWorkFile(f.name) && f.mimeType!=='application/vnd.google-apps.folder');
     return fs.map(f=>({name:f.name, title:titleFromFile(f.name), driveId:f.id, modifiedTime:f.modifiedTime}));
   }
   if(dirHandle){
     const out=[];
     for await (const [name,h] of dirHandle.entries()){
-      if(h.kind==='file' && name.toLowerCase().endsWith('.db')) out.push({name, title:titleFromFile(name), handle:h});
+      if(h.kind==='file' && isWorkFile(name)) out.push({name, title:titleFromFile(name), handle:h});
     }
     out.sort((a,b)=>a.title.localeCompare(b.title,'ko'));
     return out;
@@ -827,6 +846,7 @@ async function openWorkFile(entry){
     fileHandle = h; driveDbFileId = null;
     buf = new Uint8Array(await (await h.getFile()).arrayBuffer());
   }
+  buf = await importBytes(buf);   // gzip이면 해제(아니면 그대로)
   db = new SQL.Database(buf);
   ensureSchema();
   db.run("INSERT OR REPLACE INTO meta(key,value) VALUES('filename',?)",[entry.name]);
@@ -847,7 +867,7 @@ async function makeWorkFile(fields){
   db.run("INSERT OR REPLACE INTO meta(key,value) VALUES('filename',?)",[name]);
   seedWork(fields);
   driveDbFileId = null; fileHandle = null;
-  const data = db.export();
+  const data = await exportBytes();
   if(isDrive()){
     const c = await driveCreateFile(name, data, cfg.folderId); driveDbFileId = c.id;
   }else{
@@ -865,7 +885,7 @@ async function renameWorkFile(oldName, newName){
   if(isDrive()){
     if(driveDbFileId) await driveRenameFile(driveDbFileId, newName);
   }else if(dirHandle){
-    const data = db.export();
+    const data = await exportBytes();
     const nh = await dirHandle.getFileHandle(newName,{create:true});
     const w = await nh.createWritable(); await w.write(data); await w.close();
     if(fileHandle) await dirHandle.removeEntry(oldName).catch(()=>{});
