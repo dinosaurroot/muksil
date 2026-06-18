@@ -521,13 +521,13 @@ let dirty = false;
 let saveTimer = null;
 
 /* Drive 상태 */
-const cfg = loadCfg();           // {clientId, apiKey, folderId, folderName, mode}
+const cfg = loadCfg();           // {clientId, apiKey, appId, folderId, folderName, mode}
 const gauth = { token:null, exp:0 };
 let tokenClient = null;
 let driveDbFileId = null;        // 현재 .db 의 Drive 파일 ID
 function loadCfg(){
-  try{ return Object.assign({clientId:'',apiKey:'',folderId:'',folderName:'',mode:'local'}, JSON.parse(localStorage.getItem('muksil-drive')||'{}')); }
-  catch(e){ return {clientId:'',apiKey:'',folderId:'',folderName:'',mode:'local'}; }
+  try{ return Object.assign({clientId:'',apiKey:'',appId:'',folderId:'',folderName:'',mode:'local'}, JSON.parse(localStorage.getItem('muksil-drive')||'{}')); }
+  catch(e){ return {clientId:'',apiKey:'',appId:'',folderId:'',folderName:'',mode:'local'}; }
 }
 function saveCfg(){ try{ localStorage.setItem('muksil-drive', JSON.stringify(cfg)); }catch(e){} }
 
@@ -727,11 +727,12 @@ async function saveDbToDrive(bytes, filename){
 function pickDriveFolder(){
   return new Promise((resolve)=>{
     if(!window.gapi){ toast('Picker 로드 중… 잠시 후 다시 시도하세요.', true); return resolve(null); }
+    if(!cfg.apiKey || !cfg.appId){ toast('API Key와 프로젝트 번호를 입력하세요.', true); return resolve(null); }
     gapi.load('picker', ()=>{
       const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
         .setSelectFolderEnabled(true).setMimeTypes('application/vnd.google-apps.folder');
       const picker = new google.picker.PickerBuilder()
-        .addView(view).setOAuthToken(gauth.token).setDeveloperKey(cfg.apiKey)
+        .addView(view).setOAuthToken(gauth.token).setDeveloperKey(cfg.apiKey).setAppId(cfg.appId)
         .setTitle('작업 폴더 선택')
         .setCallback(data=>{
           if(data.action===google.picker.Action.PICKED){ const d=data.docs[0]; resolve({id:d.id, name:d.name}); }
@@ -851,7 +852,43 @@ async function loadDriveDb(fileId, name){
 }
 
 /* ---------- 설정 (Drive 연결) ---------- */
+let settingsContext = 'settings';
+function driveSettingsHtml(connected){
+  return `<div class="set-group">
+    <div class="set-head">저장 · Google Drive</div>
+    <div class="set-desc">집필 파일을 어디에 저장할지 정해요.</div>
+    <div class="seg" style="margin-bottom:14px">
+      <button class="${cfg.mode!=='drive'?'on':''}" onclick="setMode('local')">이 기기에 저장</button>
+      <button class="${cfg.mode==='drive'?'on':''}" onclick="setMode('drive')">Google Drive</button>
+    </div>
+    ${field('OAuth Client ID','clientId',cfg.clientId)}
+    ${field('API Key (Picker용)','apiKey',cfg.apiKey)}
+    ${field('프로젝트 번호 (Picker App ID)','appId',cfg.appId)}
+    <div class="kv"><span>상태</span><span class="grow"></span>
+      <b style="color:${connected?'var(--celadon)':'var(--mute)'}">${connected?'연결됨':'연결 안 됨'}</b></div>
+    <div class="kv"><span>작업 폴더</span><span class="grow"><b>${cfg.folderName?esc(cfg.folderName):'미선택'}</b></span></div>
+    <div class="field-row" style="margin-top:4px">
+      <button class="btn ghost" style="flex:1;justify-content:center" onclick="saveDriveCfgThen('connect')">Drive 연결</button>
+      <button class="btn ghost" style="flex:1;justify-content:center" onclick="saveDriveCfgThen('folder')">폴더 선택</button>
+    </div>
+    <p class="help">drive.file 권한만 사용해요 — 먹실이 만들거나 직접 고른 항목에만 접근합니다. Client ID·API Key·프로젝트 번호는 이 브라우저에만 저장돼요. 프로젝트 번호는 Google Cloud 상단 프로젝트 메뉴나 IAM 설정에서 확인합니다.</p>
+    ${connected?`<div style="margin-top:10px"><button class="btn danger" onclick="disconnectDrive()">연결 해제</button></div>`:''}
+  </div>`;
+}
+function openDriveSettings(){
+  settingsContext = 'drive';
+  const connected = !!gauth.token;
+  openModal(`<div class="modal-head"><h3>Google Drive 설정</h3><button class="icon-x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      ${driveSettingsHtml(connected)}
+    </div>
+    <div class="modal-foot">
+      ${(!db && cfg.folderId && connected)?`<button class="btn primary" onclick="closeModal();driveStartOptions()">이 폴더로 시작 →</button>`:''}
+      <button class="btn ${(!db && cfg.folderId && connected)?'ghost':'primary'}" onclick="saveDriveCfgThen()">저장</button>
+    </div>`);
+}
 function openSettings(){
+  settingsContext = 'settings';
   const connected = !!gauth.token;
   const w = (db && state.workId) ? one('SELECT * FROM works WHERE id=?',[state.workId]) : null;
   const statusOpts = ['구상중','연재중','휴재','완결'];
@@ -893,29 +930,11 @@ function openSettings(){
           <input type="number" min="320" max="1200" step="20" value="${esc(w.editor_width||760)}" onchange="setCompo('editor_width',this.value)"></div>
       </div>
     </div>` : '';
-  openModal(`<div class="modal-head"><h3>설정</h3><button class="icon-x" onclick="closeModal()">✕</button></div>
+  openModal(`<div class="modal-head"><h3>설정</h3><button class="btn ghost" style="padding:5px 10px" onclick="openDriveSettings()">Drive 설정</button><button class="icon-x" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
       ${workGroup}
       ${compoGroup}
-      <div class="set-group">
-        <div class="set-head">저장 · Google Drive</div>
-        <div class="set-desc">집필 파일을 어디에 저장할지 정해요.</div>
-        <div class="seg" style="margin-bottom:14px">
-          <button class="${cfg.mode!=='drive'?'on':''}" onclick="setMode('local')">이 기기에 저장</button>
-          <button class="${cfg.mode==='drive'?'on':''}" onclick="setMode('drive')">Google Drive</button>
-        </div>
-        ${field('OAuth Client ID','clientId',cfg.clientId)}
-        ${field('API Key (Picker용)','apiKey',cfg.apiKey)}
-        <div class="kv"><span>상태</span><span class="grow"></span>
-          <b style="color:${connected?'var(--celadon)':'var(--mute)'}">${connected?'연결됨':'연결 안 됨'}</b></div>
-        <div class="kv"><span>작업 폴더</span><span class="grow"><b>${cfg.folderName?esc(cfg.folderName):'미선택'}</b></span></div>
-        <div class="field-row" style="margin-top:4px">
-          <button class="btn ghost" style="flex:1;justify-content:center" onclick="saveDriveCfgThen('connect')">Drive 연결</button>
-          <button class="btn ghost" style="flex:1;justify-content:center" onclick="saveDriveCfgThen('folder')">폴더 선택</button>
-        </div>
-        <p class="help">drive.file 권한만 사용해요 — 먹실이 만들거나 직접 고른 항목에만 접근합니다. Client ID·API Key는 이 브라우저에만 저장돼요. 설정 방법은 함께 드린 안내(README) 참고.</p>
-        ${connected?`<div style="margin-top:10px"><button class="btn danger" onclick="disconnectDrive()">연결 해제</button></div>`:''}
-      </div>
+      ${driveSettingsHtml(connected)}
     </div>
     <div class="modal-foot">
       ${(!db && cfg.folderId && connected)?`<button class="btn primary" onclick="closeModal();driveStartOptions()">이 폴더로 시작 →</button>`:''}
@@ -976,19 +995,20 @@ function readCfgInputs(){
   const v=formVals();
   if('clientId' in v) cfg.clientId=v.clientId.trim();
   if('apiKey' in v) cfg.apiKey=v.apiKey.trim();
+  if('appId' in v) cfg.appId=v.appId.trim();
   saveCfg();
 }
 async function saveDriveCfgThen(action){
   readCfgInputs();
   if(action==='connect'){
     const ok=await connectDrive().catch(e=>{toast(e.message,true);return false;});
-    if(ok){ toast('드라이브 연결됨'); openSettings(); }
+    if(ok){ toast('드라이브 연결됨'); settingsContext==='drive' ? openDriveSettings() : openSettings(); }
     return;
   }
   if(action==='folder'){
     if(!gauth.token){ const ok=await connectDrive().catch(()=>false); if(!ok) return; }
     const f=await pickDriveFolder();
-    if(f){ cfg.folderId=f.id; cfg.folderName=f.name; saveCfg(); driveDbFileId=null; toast('폴더 선택됨: '+f.name); openSettings(); }
+    if(f){ cfg.folderId=f.id; cfg.folderName=f.name; saveCfg(); driveDbFileId=null; toast('폴더 선택됨: '+f.name); settingsContext==='drive' ? openDriveSettings() : openSettings(); }
     return;
   }
   if(db) updateDbState();
@@ -998,18 +1018,18 @@ function setMode(m){
   if(m==='drive' && (!cfg.clientId)){ readCfgInputs(); }
   cfg.mode=m; saveCfg();
   if(db) updateDbState();
-  openSettings();
+  settingsContext==='drive' ? openDriveSettings() : openSettings();
 }
 function disconnectDrive(){
   if(gauth.token && window.google?.accounts?.oauth2){
     try{ google.accounts.oauth2.revoke(gauth.token, ()=>{}); }catch(e){}
   }
   gauth.token=null; gauth.exp=0; driveDbFileId=null;
-  toast('연결 해제됨'); openSettings();
+  toast('연결 해제됨'); settingsContext==='drive' ? openDriveSettings() : openSettings();
 }
 function openDriveStart(){
   // 시작화면의 'Google Drive로 작업하기'
-  if(!cfg.clientId || !cfg.apiKey){ enterAppShellForSettings(); return; }
+  if(!cfg.clientId || !cfg.apiKey || !cfg.appId){ openDriveSettings(); return; }
   // 연결 → 폴더 확인 → 시작 옵션
   (async()=>{
     const ok = gauth.token || await connectDrive().catch(()=>false);
@@ -1018,7 +1038,7 @@ function openDriveStart(){
     driveStartOptions();
   })();
 }
-function enterAppShellForSettings(){ openSettings(); }
+function enterAppShellForSettings(){ openDriveSettings(); }
 function driveStartOptions(){
   openModal(`<div class="modal-head"><h3>Google Drive</h3></div>
     <div class="modal-body">
