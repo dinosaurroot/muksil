@@ -383,8 +383,8 @@ nav .navitem.active .count{color:var(--celadon)}
 .tl::before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:var(--line)}
 .tl-item{position:relative;margin-bottom:16px}
 .tl-node{position:absolute;left:-26px;top:6px;width:14px;height:14px;border-radius:50%;border:3px solid var(--ink);box-shadow:0 0 0 1px var(--line)}
-.tl-card{background:var(--ink-3);border:1px solid var(--line);border-radius:var(--radius-sm);padding:12px 14px;cursor:pointer;transition:.12s}
-.tl-card:hover{border-color:var(--celadon-deep)}
+.tl-card{background:var(--ink-3);border:1px solid var(--line);border-left-width:4px;border-radius:var(--radius-sm);padding:12px 14px;cursor:pointer;transition:.12s}
+.tl-card:hover{filter:brightness(1.12)}
 .tl-card h4{font-size:14px;margin:3px 0 0}
 .tl-card p{font-size:12.5px;color:var(--paper-dim);margin:5px 0 0;white-space:pre-wrap}
 .tl-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -505,7 +505,7 @@ nav .navitem.active .count{color:var(--celadon)}
    ==================================================================== */
 "use strict";
 
-const APP_VERSION = 'v0.8.0';
+const APP_VERSION = 'v0.8.2';
 const APP_UPDATED = '2026-06-18';
 // ★ 기본 OAuth Client ID — 여기에 적어두면 모든 기기/브라우저에서 자동으로 채워져 재입력 불필요.
 //    Client ID는 비밀이 아닌 공개 식별자라 코드에 박아도 안전(로그인·동의는 각자 본인 구글 계정에서, 테스트 사용자만 통과).
@@ -584,7 +584,7 @@ const gauth = { token:null, exp:0 };
 let tokenClient = null;
 let driveDbFileId = null;        // 현재 .db 의 Drive 파일 ID
 function loadCfg(){
-  const base = {clientId:'',apiKey:'',appId:'',folderId:'',folderName:'',mode:'local',lastWork:''};
+  const base = {clientId:'',apiKey:'',appId:'',folderId:'',folderName:'',mode:'local',lastWork:'',lastView:'dash'};
   let c;
   try{ c = Object.assign(base, JSON.parse(localStorage.getItem('muksil-drive')||'{}')); }
   catch(e){ c = base; }
@@ -1250,8 +1250,16 @@ function openDriveStart(){
     }
     cfg.mode='drive'; saveCfg();
     await initSQL();
-    showWorkList();
+    await resumeOpenLast();   // 직전 작품이 있으면 바로 열고(같은 화면 복귀), 없으면 목록
   })();
+}
+/* 직전 작품 자동 열기(없으면 작품 목록) — 새로고침/재연결 복귀용 */
+async function resumeOpenLast(){
+  if(cfg.lastWork){
+    const e = (await listWorkFiles().catch(()=>[])).find(f=>f.name===cfg.lastWork);
+    if(e){ await openWorkFile(e); return; }
+  }
+  showWorkList();
 }
 function enterAppShellForSettings(){ openDriveSettings(); }
 
@@ -1262,7 +1270,7 @@ function enterApp(){
   state.workId = (one('SELECT id FROM works ORDER BY id LIMIT 1')||{}).id || null;
   refreshWorkSelect();
   buildNav();
-  go('dash');
+  go(VIEWS.some(v=>v.id===cfg.lastView) ? cfg.lastView : 'dash');   // 직전 화면 복귀
   updateDbState();
 }
 
@@ -1306,6 +1314,7 @@ function updateNavCounts(){
 
 function go(view){
   state.view = view;
+  if(cfg.lastView!==view){ cfg.lastView=view; saveCfg(); }   // 새로고침 시 같은 화면 복귀용
   $('#view').style.padding='';
   $$('#nav .navitem').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
   const v = VIEWS.find(x=>x.id===view);
@@ -1947,7 +1956,7 @@ RENDER.time = ()=>{
       const when = [esc(e.date||''), esc(e.time||'')].filter(Boolean).join(' · ');
       return `<div class="tl-item">
         <div class="tl-node" style="background:${col}"></div>
-        <div class="tl-card" onclick="openTimeForm(${e.id})">
+        <div class="tl-card" style="border-color:${col}" onclick="openTimeForm(${e.id})">
           <div class="tl-meta"><span class="tl-when">${when||'시점 미정'}</span>${e.type?`<span class="tl-type" style="background:${col}1f;color:${col};border-color:${col}55">${esc(e.type)}</span>`:''}</div>
           <h4>${esc(e.title||'무제')}</h4>
           ${e.detail?`<p>${esc(e.detail)}</p>`:''}
@@ -2089,23 +2098,29 @@ document.addEventListener('visibilitychange', ()=>{
 // 미저장 경고
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue=''; } });
 
-// 부팅: 직전 로컬 폴더 권한이 살아있으면 자동 재개 (없으면 첫 화면 유지)
+// 부팅: 새로고침 후 직전 작품·화면으로 자동 복귀 (실패하면 첫 화면 유지)
+function waitFor(cond, ms=4000){ return new Promise(res=>{ const t0=Date.now(); (function chk(){ try{ if(cond()) return res(true); }catch(e){} if(Date.now()-t0>ms) return res(false); setTimeout(chk,80); })(); }); }
 (async function bootResume(){
-  if(cfg.mode!=='local') return;
-  let h; try{ h = await idb('get','dirHandle'); }catch(e){ return; }
-  if(!h || !h.queryPermission) return;
-  let perm; try{ perm = await h.queryPermission({mode:'readwrite'}); }catch(e){ return; }
-  if(perm!=='granted') return;   // 권한 재요청은 사용자가 버튼을 눌렀을 때만
-  dirHandle = h;
-  await initSQL();
   try{
-    if(cfg.lastWork){
-      const files = await listWorkFiles();
-      const e = files.find(f=>f.name===cfg.lastWork);
-      if(e){ await openWorkFile(e); return; }
+    if(cfg.mode==='local'){
+      // 로컬: 폴더 권한이 살아있으면 자동 재개(권한 재요청 팝업은 띄우지 않음)
+      const h = await idb('get','dirHandle').catch(()=>null);
+      if(!h || !h.queryPermission) return;
+      const perm = await h.queryPermission({mode:'readwrite'}).catch(()=>'prompt');
+      if(perm!=='granted') return;
+      dirHandle = h;
+      await initSQL();
+      await resumeOpenLast();
+    } else if(cfg.mode==='drive' && cfg.clientId && cfg.folderId){
+      // Drive: GIS 로드 대기 후 조용한 토큰 재요청 → 되면 자동 복귀, 안 되면 splash 유지(버튼 1번으로 복귀)
+      const ready = await waitFor(()=>window.google && google.accounts && google.accounts.oauth2, 4000);
+      if(!ready) return;
+      const tok = await getToken(false).catch(()=>null);
+      if(!tok) return;
+      await initSQL();
+      await resumeOpenLast();
     }
-    showWorkList();
-  }catch(e){ /* 실패 시 첫 화면 유지 */ }
+  }catch(e){ /* 첫 화면 유지 */ }
 })();
 
 </script>
