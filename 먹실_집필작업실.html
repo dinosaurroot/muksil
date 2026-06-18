@@ -469,7 +469,7 @@ nav .navitem.active .count{color:var(--celadon)}
    ==================================================================== */
 "use strict";
 
-const APP_VERSION = 'v0.4.0';
+const APP_VERSION = 'v0.4.1';
 const APP_UPDATED = '2026-06-18';
 const SCHEMA_VERSION = 3;
 const SCHEMA = `
@@ -634,9 +634,9 @@ function toast(msg, err){
 }
 
 /* ====================================================================
-   Google Drive (scope: drive.file — 앱이 만든/고른 항목만 접근)
+   Google Drive (scope: drive — 사용자 Drive 전체 접근, 수동 생성 파일/폴더도 인식)
    ==================================================================== */
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
 
 function initTokenClient(){
   if(tokenClient || !window.google || !google.accounts) return;
@@ -715,15 +715,14 @@ async function driveList(parentId){
   const r = await driveApi(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType,modifiedTime,size)&orderBy=folder,name&pageSize=200`);
   return (await r.json()).files || [];
 }
-async function driveListRoot(){
-  const r = await driveApi("https://www.googleapis.com/drive/v3/files?q=trashed=false&fields=files(id,name,mimeType,modifiedTime,size)&orderBy=folder,name&pageSize=200");
-  return (await r.json()).files || [];
-}
 async function driveFindByName(parentId, name){
   return (await driveList(parentId)).find(f=>f.name===name && f.mimeType!=='application/vnd.google-apps.folder') || null;
 }
 async function driveFindRootFolder(name){
-  return (await driveListRoot()).find(f=>f.name===name && f.mimeType==='application/vnd.google-apps.folder') || null;
+  // 전체 Drive 스코프: 최상위(root)에 같은 이름의 폴더를 직접 질의(앱이 만든 것 + 사용자가 만든 것 모두)
+  const q = encodeURIComponent(`name='${name.replace(/'/g,"\\'")}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`);
+  const r = await driveApi(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&orderBy=createdTime&pageSize=10`);
+  return ((await r.json()).files || [])[0] || null;
 }
 async function useDefaultDriveFolder(){
   const folderName = 'Muksil';
