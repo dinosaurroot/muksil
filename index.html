@@ -468,7 +468,7 @@ nav .navitem.active .count{color:var(--celadon)}
    ==================================================================== */
 "use strict";
 
-const APP_VERSION = 'v0.5.1';
+const APP_VERSION = 'v0.5.2';
 const APP_UPDATED = '2026-06-18';
 // ★ 기본 OAuth Client ID — 여기에 적어두면 모든 기기/브라우저에서 자동으로 채워져 재입력 불필요.
 //    Client ID는 비밀이 아닌 공개 식별자라 코드에 박아도 안전(로그인·동의는 각자 본인 구글 계정에서, 테스트 사용자만 통과).
@@ -851,6 +851,16 @@ async function openWorkFile(entry){
   ensureSchema();
   db.run("INSERT OR REPLACE INTO meta(key,value) VALUES('filename',?)",[entry.name]);
   cfg.lastWork = entry.name; saveCfg();
+  // 레거시 .db(압축 전) → .db.gz로 자동 정리 (이름만; 내용은 다음 저장 때 압축됨)
+  if(/\.db$/i.test(entry.name) && !/\.db\.gz$/i.test(entry.name)){
+    const newName = entry.name.replace(/\.db$/i, '.db.gz');
+    try{
+      const others = (await listWorkFiles()).filter(f=>f.name!==entry.name);
+      if(!others.some(f=>f.name.toLowerCase()===newName.toLowerCase())){
+        await renameWorkFile(entry.name, newName);   // meta.filename·cfg.lastWork 갱신
+      }
+    }catch(e){ /* 마이그레이션 실패해도 열기는 진행 */ }
+  }
   closeModal(); enterApp();
 }
 
