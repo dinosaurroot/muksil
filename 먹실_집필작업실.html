@@ -339,6 +339,7 @@ nav .navitem.active .count{color:var(--celadon)}
 .splash-actions{display:flex;flex-direction:column;gap:10px}
 .splash-actions .btn{justify-content:center;padding:13px}
 .splash-note{font-size:11.5px;color:var(--mute-2);margin-top:18px;line-height:1.6}
+.splash-version{font-size:11px;color:var(--mute-2);margin-top:10px;opacity:.82}
 
 .hide{display:none !important}
 
@@ -409,6 +410,7 @@ nav .navitem.active .count{color:var(--celadon)}
       <button class="btn ghost" id="btnDrive">☁ Google Drive로 작업하기</button>
     </div>
     <p class="splash-note" id="splashNote">데이터는 내 컴퓨터의 .db 파일, 또는 내가 지정한 Google Drive 폴더에만 저장돼요.</p>
+    <p class="splash-version" id="appVersion">앱 버전 확인 중</p>
   </div>
 </div>
 
@@ -468,6 +470,8 @@ nav .navitem.active .count{color:var(--celadon)}
    ==================================================================== */
 "use strict";
 
+const APP_VERSION = 'v0.3.1';
+const APP_UPDATED = '2026-06-18';
 const SCHEMA_VERSION = 3;
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS works(
@@ -538,6 +542,7 @@ const now = () => new Date().toISOString();
 const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const fmt = n => (n||0).toLocaleString('ko-KR');
 const supportsFS = 'showOpenFilePicker' in window;
+document.getElementById('appVersion').textContent = `앱 ${APP_VERSION} · ${APP_UPDATED}`;
 
 /* ---------- DB 헬퍼 ---------- */
 function all(sql, params=[]){
@@ -1032,8 +1037,8 @@ function openDriveStart(){
   if(!cfg.clientId || !cfg.apiKey || !cfg.appId){ openDriveSettings(); return; }
   // 연결 → 폴더 확인 → 시작 옵션
   (async()=>{
-    const ok = gauth.token || await connectDrive().catch(()=>false);
-    if(!ok) return;
+    const ok = gauth.token || await connectDrive().catch(e=>{ toast(e.message||'드라이브 연결을 시작하지 못했어요.', true); return false; });
+    if(!ok){ openDriveSettings(); return; }
     if(!cfg.folderId){ const f=await pickDriveFolder(); if(!f) return; cfg.folderId=f.id; cfg.folderName=f.name; saveCfg(); }
     driveStartOptions();
   })();
