@@ -405,6 +405,36 @@ nav .navitem.active .count{color:var(--celadon)}
 .att-link a,.att-file .att-open{display:inline-block;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--ink-3);font-size:12.5px;font-weight:700;color:var(--paper)}
 .att-link a{color:var(--celadon)}
 .att-file .att-open:hover,.att-link a:hover{border-color:var(--celadon-deep)}
+.att-image img{cursor:zoom-in}
+.att-badge{font-size:11px;font-weight:700;color:var(--mute);margin-left:6px}
+.lightbox{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.86);display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:20px}
+.lightbox img{max-width:92vw;max-height:92vh;border-radius:8px;box-shadow:0 12px 50px rgba(0,0,0,.6)}
+/* 인물 접이식 그룹 */
+.cf-group{border:1px solid var(--line);border-radius:var(--radius-sm);margin-top:10px;background:var(--ink-2)}
+.cf-group>summary{cursor:pointer;padding:11px 14px;font-size:12.5px;font-weight:800;color:var(--celadon);letter-spacing:.03em;list-style:none;user-select:none}
+.cf-group>summary::-webkit-details-marker{display:none}
+.cf-group>summary::before{content:"▸ ";color:var(--mute)}
+.cf-group[open]>summary::before{content:"▾ "}
+.cf-body{padding:4px 14px 14px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cf-body .field:has(textarea){grid-column:1/-1}
+@media(max-width:760px){ .cf-body{grid-template-columns:1fr} }
+.synopsis-card .synopsis-body{font-size:13.5px;color:var(--paper-dim);line-height:1.75;white-space:pre-wrap;margin:0}
+.chap-mark{font-size:10.5px;margin-left:5px;opacity:.85;white-space:nowrap}
+/* 인물 카드 초상 */
+.av.av-photo{padding:0;overflow:hidden}
+.av.av-photo img{width:100%;height:100%;object-fit:cover;display:block}
+/* 인물 읽기 뷰 */
+.cv-hero{display:flex;gap:14px;align-items:center;margin-bottom:6px}
+.cv-portrait{width:84px;height:84px;border-radius:12px;object-fit:cover;border:1px solid var(--line);flex:0 0 auto;background:var(--ink-2)}
+.cv-noimg{width:84px;height:84px;border-radius:12px;background:var(--celadon);color:#0e1814;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800;font-family:var(--serif);flex:0 0 auto}
+.cv-role{font-size:12px;font-weight:800;color:var(--celadon)}
+.cv-oneliner{margin:4px 0 0;font-size:13.5px;color:var(--paper-dim)}
+.cv-group{margin-top:14px;border-top:1px solid var(--line-soft);padding-top:10px}
+.cv-gtitle{font-size:12px;font-weight:800;color:var(--celadon);margin-bottom:6px}
+.cv-row{display:grid;grid-template-columns:110px 1fr;gap:10px;padding:3px 0;font-size:13px}
+.cv-row .cv-k{color:var(--mute);font-weight:700}
+.cv-row .cv-v{color:var(--paper);white-space:pre-wrap}
+@media(max-width:760px){ .cv-row{grid-template-columns:84px 1fr} }
 .help{font-size:11.5px;color:var(--mute-2);line-height:1.55;margin-top:6px}
 .help a{color:var(--celadon)}
 /* 설정 그룹 (VS Code식 항목별 구분) */
@@ -494,6 +524,7 @@ nav .navitem.active .count{color:var(--celadon)}
     <h2 id="viewTitle">대시보드</h2>
     <span class="sub" id="viewSub"></span>
     <span class="spacer"></span>
+    <button class="btn ghost" style="padding:6px 11px;margin-right:8px" onclick="openSearch()" title="검색 (작품 내)">🔍</button>
     <div id="topActions"></div>
   </div>
   <div class="view" id="view"></div>
@@ -516,13 +547,13 @@ nav .navitem.active .count{color:var(--celadon)}
    ==================================================================== */
 "use strict";
 
-const APP_VERSION = 'v0.9.0';
+const APP_VERSION = 'v0.11.0';
 const APP_UPDATED = '2026-06-18';
 // ★ 기본 OAuth Client ID — 여기에 적어두면 모든 기기/브라우저에서 자동으로 채워져 재입력 불필요.
 //    Client ID는 비밀이 아닌 공개 식별자라 코드에 박아도 안전(로그인·동의는 각자 본인 구글 계정에서, 테스트 사용자만 통과).
 //    바꾸려면 이 한 줄만 수정. 비우면('') 예전처럼 설정에서 직접 입력.
 const DEFAULT_CLIENT_ID = '806316722531-74mhinip8crgs8frlmmk1g2q8skulam1.apps.googleusercontent.com';
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS works(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -569,6 +600,10 @@ CREATE TABLE IF NOT EXISTS attachments(
   owner_type TEXT, owner_id INTEGER, kind TEXT,
   name TEXT, rel_path TEXT, url TEXT, mime TEXT, drive_id TEXT,
   size INTEGER, sort INTEGER DEFAULT 0, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS char_relations(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
+  char_id INTEGER, target_id INTEGER, target_name TEXT, relation TEXT, created_at TEXT
 );
 CREATE TABLE IF NOT EXISTS plots(
   id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
@@ -665,6 +700,9 @@ function ensureSchema(){
   addCol('tl_mode', "ALTER TABLE works ADD COLUMN tl_mode TEXT DEFAULT 'date'");
   // cats.color 보강(연표 유형 색)
   if(!new Set(all('PRAGMA table_info(cats)').map(r=>r.name)).has('color')){ db.run("ALTER TABLE cats ADD COLUMN color TEXT"); changed=true; }
+  // characters 상세 프로필 컬럼 보강
+  const ccols = new Set(all('PRAGMA table_info(characters)').map(r=>r.name));
+  CHAR_COLS.forEach(name=>{ if(!ccols.has(name)){ db.run(`ALTER TABLE characters ADD COLUMN ${name} TEXT`); ccols.add(name); changed=true; } });
   const oldVer = +(one("SELECT value FROM meta WHERE key='schema_version'")?.value || 0);
   if(oldVer < SCHEMA_VERSION){
     db.run("INSERT OR REPLACE INTO meta(key,value) VALUES('schema_version',?)",[String(SCHEMA_VERSION)]);
@@ -843,11 +881,13 @@ async function driveMoveToFolder(fileId, addParent, removeParent, newName){
   });
   return r.json();
 }
-async function driveEnsureSubfolder(parentId, name){
+async function driveFindSubfolder(parentId, name){
   const q = encodeURIComponent(`name='${name.replace(/'/g,"\\'")}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`);
   const r = await driveApi(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=1`);
-  const found = ((await r.json()).files || [])[0];
-  return found || await driveCreateFolder(name, parentId);
+  return ((await r.json()).files || [])[0] || null;
+}
+async function driveEnsureSubfolder(parentId, name){
+  return await driveFindSubfolder(parentId, name) || await driveCreateFolder(name, parentId);
 }
 async function driveList(parentId){
   const q = encodeURIComponent(`'${parentId}' in parents and trashed=false`);
@@ -988,7 +1028,41 @@ async function renameWorkFile(oldName, newName){
   }
   db.run("INSERT OR REPLACE INTO meta(key,value) VALUES('filename',?)",[newName]);
   cfg.lastWork = newName; saveCfg();
+  await renameAssetFolder(titleFromFile(oldName), titleFromFile(newName)).catch(()=>{});  // 첨부 폴더도 따라 이름변경
   return true;
+}
+
+/* 첨부 에셋 폴더(<제목>/) 재귀 복사·이동·이름변경 */
+async function localCopyDir(src, destParent, destName){
+  const dest = await destParent.getDirectoryHandle(destName,{create:true});
+  for await (const [name,h] of src.entries()){
+    if(h.kind==='directory') await localCopyDir(h, dest, name);
+    else { const f=await h.getFile(); const nh=await dest.getFileHandle(name,{create:true}); const w=await nh.createWritable(); await w.write(await f.arrayBuffer()); await w.close(); }
+  }
+  return dest;
+}
+async function renameAssetFolder(oldTitle, newTitle){
+  if(!oldTitle || oldTitle===newTitle) return;
+  if(isDrive()){
+    const f = await driveFindSubfolder(cfg.folderId, oldTitle);
+    if(f) await driveRenameFile(f.id, newTitle);
+  }else if(dirHandle){
+    let src; try{ src = await dirHandle.getDirectoryHandle(oldTitle); }catch(e){ return; }   // 폴더 없으면(첨부 없음) 건너뜀
+    await localCopyDir(src, dirHandle, newTitle);
+    await dirHandle.removeEntry(oldTitle,{recursive:true}).catch(()=>{});
+  }
+}
+async function trashAssetFolder(title, stamp){
+  const destName = `${title} (삭제 ${stamp})`;
+  if(isDrive()){
+    const f = await driveFindSubfolder(cfg.folderId, title);
+    if(f){ const trash = await driveEnsureSubfolder(cfg.folderId, TRASH_NAME); await driveMoveToFolder(f.id, trash.id, cfg.folderId, destName); }
+  }else if(dirHandle){
+    let src; try{ src = await dirHandle.getDirectoryHandle(title); }catch(e){ return; }
+    const trash = await dirHandle.getDirectoryHandle(TRASH_NAME,{create:true});
+    await localCopyDir(src, trash, destName);
+    await dirHandle.removeEntry(title,{recursive:true}).catch(()=>{});
+  }
 }
 
 /* 작품 파일 완전 삭제 (현재는 미사용 — trashWorkFile로 대체) */
@@ -1006,6 +1080,7 @@ function archivedName(name){
 }
 async function trashWorkFile(entry){
   const dest = archivedName(entry.name);
+  const stamp = new Date().toISOString().slice(0,16).replace('T',' ').replace(/:/g,'');
   if(entry.driveId!=null){
     const trash = await driveEnsureSubfolder(cfg.folderId, TRASH_NAME);
     await driveMoveToFolder(entry.driveId, trash.id, cfg.folderId, dest);
@@ -1017,6 +1092,7 @@ async function trashWorkFile(entry){
     const w = await nh.createWritable(); await w.write(bytes); await w.close();
     await dirHandle.removeEntry(entry.name).catch(()=>{});
   }
+  await trashAssetFolder(titleFromFile(entry.name), stamp).catch(()=>{});  // 첨부 폴더도 휴지통으로
 }
 
 /* ---------- 작품 목록 / 새 작품 ---------- */
@@ -1331,6 +1407,7 @@ function updateNavCounts(){
 
 function go(view){
   state.view = view;
+  revokeViewURLs();   // 이전 화면 이미지 objectURL 정리
   if(cfg.lastView!==view){ cfg.lastView=view; saveCfg(); }   // 새로고침 시 같은 화면 복귀용
   $('#view').style.padding='';
   $$('#nav .navitem').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
@@ -1470,7 +1547,7 @@ function attListHtml(ownerType, ownerId){
   return rows.map(a=>{
     const x = `<button class="att-x" title="삭제" onclick="attachRemove(${a.id},'${ownerType}',${+ownerId})">✕</button>`;
     if(a.kind==='link') return `<div class="att-item att-link"><a href="${esc(a.url)}" target="_blank" rel="noopener">🔗 ${esc(a.name||a.url)}</a>${x}</div>`;
-    if(a.kind==='image') return `<div class="att-item att-image"><img data-aid="${a.id}" alt="${esc(a.name)}">${x}</div>`;
+    if(a.kind==='image') return `<div class="att-item att-image"><img data-aid="${a.id}" alt="${esc(a.name)}" onclick="openAttImage(${a.id})">${x}</div>`;
     return `<div class="att-item att-file"><button class="att-open" onclick="openAttFile(${a.id})">📄 ${esc(a.name)}</button>${x}</div>`;
   }).join('');
 }
@@ -1486,6 +1563,18 @@ async function hydrateAtts(){
   }
 }
 function revokeAttURLs(){ attURLs.forEach(u=>{try{URL.revokeObjectURL(u)}catch(e){}}); attURLs=[]; }
+/* 화면(#view) 내 이미지 지연로딩 — 인물 카드 초상 등. go()에서 정리 */
+let viewURLs=[];
+function revokeViewURLs(){ viewURLs.forEach(u=>{try{URL.revokeObjectURL(u)}catch(e){}}); viewURLs=[]; }
+async function hydrateImgs(scope){
+  if(!scope) return;
+  for(const img of scope.querySelectorAll('img[data-aimg]')){
+    if(img.getAttribute('src')) continue;
+    const a=one('SELECT * FROM attachments WHERE id=?',[+img.dataset.aimg]); if(!a) continue;
+    const blob=await attachBlob(a); if(blob){ const u=URL.createObjectURL(blob); viewURLs.push(u); img.src=u; }
+  }
+}
+function charPortrait(cid){ return (one("SELECT id FROM attachments WHERE work_id=? AND owner_type='char' AND owner_id=? AND kind='image' ORDER BY sort,id LIMIT 1",[state.workId,cid])||{}).id; }
 async function openAttFile(id){
   const a=one('SELECT * FROM attachments WHERE id=?',[id]); if(!a) return;
   const blob = await attachBlob(a);
@@ -1493,6 +1582,18 @@ async function openAttFile(id){
   const u=URL.createObjectURL(blob); window.open(u,'_blank','noopener');
   setTimeout(()=>{try{URL.revokeObjectURL(u)}catch(e){}}, 60000);
 }
+async function openAttImage(id){
+  const a=one('SELECT * FROM attachments WHERE id=?',[id]); if(!a) return;
+  const blob = await attachBlob(a);
+  if(!blob){ toast('파일을 찾을 수 없어요(폴더 이동/삭제?)', true); return; }
+  const u=URL.createObjectURL(blob);
+  const ov=document.createElement('div'); ov.className='lightbox';
+  ov.innerHTML=`<img src="${u}" alt="${esc(a.name)}">`;
+  ov.onclick=()=>{ ov.remove(); try{URL.revokeObjectURL(u)}catch(e){} };
+  document.body.appendChild(ov);
+}
+function attN(ownerType, ownerId){ return one('SELECT COUNT(*) n FROM attachments WHERE work_id=? AND owner_type=? AND owner_id=?',[state.workId,ownerType,+ownerId]).n; }
+function attBadge(ownerType, ownerId){ const n=attN(ownerType,ownerId); return n?`<span class="att-badge" title="첨부 ${n}">📎${n}</span>`:''; }
 async function attachAddFile(ownerType, ownerId, file){
   if(!file) return;
   if(!hasLocation()){ toast('작업 위치(폴더/Drive)가 필요해요', true); return; }
@@ -1526,6 +1627,7 @@ function delEntity(ownerType, id){
   const m=ATTACH_OWNERS[ownerType];
   (async()=>{
     try{ await attachDeleteFor(ownerType, id); }catch(e){}
+    if(ownerType==='char') run('DELETE FROM char_relations WHERE work_id=? AND (char_id=? OR target_id=?)',[state.workId,id,id]);
     run(`DELETE FROM ${m.table} WHERE id=?`,[id]);
     closeModal(); go(m.view);
   })();
@@ -1545,6 +1647,7 @@ function openWorkForm(id){
       ${field('로그라인 (한 줄 소개)','logline',w.logline)}
       ${field('시놉시스','synopsis',w.synopsis,'textarea')}
       <p class="help">상태·목표 회차·목표 분량은 상단 <b>설정</b>의 ‘작품’ 항목에서 조절해요.</p>
+      ${attachmentsSectionHtml('work', id)}
     </div>
     <div class="modal-foot">
       ${id?`<button class="btn danger" onclick="deleteWork(${id})">🗑 휴지통으로</button>`:''}
@@ -1635,6 +1738,10 @@ RENDER.dash = ()=>{
         <div style="margin-top:16px"><button class="btn ghost" style="width:100%;justify-content:center" onclick="go('write')">이어서 집필하기 →</button></div>
       </div>
     </div>
+    ${w.synopsis ? `<div class="card synopsis-card">
+      <div class="section-title" style="margin:0 0 8px">시놉시스</div>
+      <p class="synopsis-body">${esc(w.synopsis)}</p>
+    </div>` : ''}
     <div class="card calendar-card">
       <div class="cal-head">
         <span class="section-title" style="margin:0">집필 달력 · 최근 17주</span>
@@ -1714,11 +1821,14 @@ RENDER.write = ()=>{
 function renderChapterList(){
   const rows = all('SELECT * FROM chapters WHERE work_id=? ORDER BY no',[state.workId]);
   const countCol = workUsesNoSpace() ? 'char_count_ns' : 'char_count';
-  $('#chapScroll').innerHTML = rows.length ? rows.map(c=>`
-    <div class="chap-item ${c.id===state.chapterId?'active':''}" onclick="openChapter(${c.id})">
-      <div class="t"><span class="no">${c.no}화</span><span class="ti">${c.title?esc(c.title):'무제'}</span></div>
+  const acnt={}; all("SELECT owner_id, COUNT(*) n FROM attachments WHERE work_id=? AND owner_type='chapter' GROUP BY owner_id",[state.workId]).forEach(r=>acnt[r.owner_id]=r.n);
+  $('#chapScroll').innerHTML = rows.length ? rows.map(c=>{
+    const marks = `${c.memo&&c.memo.trim()?'<span class="chap-mark" title="메모">📝</span>':''}${acnt[c.id]?`<span class="chap-mark" title="첨부 ${acnt[c.id]}">📎${acnt[c.id]}</span>`:''}`;
+    return `<div class="chap-item ${c.id===state.chapterId?'active':''}" onclick="openChapter(${c.id})">
+      <div class="t"><span class="no">${c.no}화</span><span class="ti">${c.title?esc(c.title):'무제'}</span>${marks}</div>
       <div class="m"><span>${fmt(c[countCol])}자</span><span class="chip ${c.status==='발행'?'celadon':c.status==='퇴고'?'amber':''}" style="padding:1px 7px">${esc(c.status)}</span></div>
-    </div>`).join('') : `<div style="padding:24px 16px;color:var(--mute);font-size:12.5px;text-align:center">아직 회차가 없어요.<br>＋ 회차로 시작하세요.</div>`;
+    </div>`;
+  }).join('') : `<div style="padding:24px 16px;color:var(--mute);font-size:12.5px;text-align:center">아직 회차가 없어요.<br>＋ 회차로 시작하세요.</div>`;
 }
 
 function renderEditorEmpty(){
@@ -1748,6 +1858,7 @@ function openChapter(id){
       <div class="ed-meta">
         <select id="edStatus">${['초고','퇴고','발행'].map(s=>`<option ${s===c.status?'selected':''}>${s}</option>`).join('')}</select>
         <button class="btn ghost" style="padding:5px 10px" onclick="chapterMemo(${id})">메모</button>
+        <button class="btn ghost" style="padding:5px 10px" onclick="openChapterAttach(${id})">📎 첨부</button>
         <button class="btn danger" style="padding:5px 10px" onclick="deleteChapter(${id})">삭제</button>
         <span class="save-state" id="saveState">저장됨</span>
       </div>
@@ -1803,9 +1914,14 @@ function saveChapter(silent){
 }
 
 function deleteChapter(id){
-  if(!confirm('이 회차를 삭제할까요?')) return;
-  run('DELETE FROM chapters WHERE id=?',[id]);
-  state.chapterId=null; RENDER.write();
+  if(!confirm('이 회차를 삭제할까요? 첨부도 함께 삭제됩니다.')) return;
+  (async()=>{ try{ await attachDeleteFor('chapter', id); }catch(e){} run('DELETE FROM chapters WHERE id=?',[id]); state.chapterId=null; RENDER.write(); })();
+}
+function openChapterAttach(id){
+  const c=one('SELECT no,title FROM chapters WHERE id=?',[id])||{};
+  openModal(`<div class="modal-head"><h3>${esc(c.no)}화 첨부${c.title?' · '+esc(c.title):''}</h3><button class="icon-x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">${attachmentsSectionHtml('chapter', id)}</div>
+    <div class="modal-foot"><button class="btn primary" onclick="closeModal()">닫기</button></div>`);
 }
 
 function chapterMemo(id){
@@ -1821,9 +1937,11 @@ function chapterMemo(id){
    ==================================================================== */
 function castCard(c, colors){
   const col = (colors&&colors[c.role]) || 'var(--celadon)';
-  return `<div class="card entity" style="border-left:4px solid ${col}" onclick="openCastForm(${c.id})">
-    <div class="top"><div class="av" style="background:${col}">${esc((c.name||'?').slice(0,1))}</div>
-      <div><h4>${esc(c.name||'무명')}</h4><div class="role">${esc(c.role)}</div></div></div>
+  const pid = charPortrait(c.id);
+  const av = pid ? `<div class="av av-photo"><img data-aimg="${pid}" alt=""></div>` : `<div class="av" style="background:${col}">${esc((c.name||'?').slice(0,1))}</div>`;
+  return `<div class="card entity" style="border-left:4px solid ${col}" onclick="openCastView(${c.id})">
+    <div class="top">${av}
+      <div><h4>${esc(c.name||'무명')}${attBadge('char',c.id)}</h4><div class="role">${esc(c.role)}</div></div></div>
     <p>${c.oneliner?esc(c.oneliner):'<span style="opacity:.5">한 줄 설정을 적어보세요</span>'}</p>
   </div>`;
 }
@@ -1846,17 +1964,134 @@ RENDER.cast = ()=>{
     body = rows.length ? `<div class="cards">${rows.map(c=>castCard(c,colors)).join('')}</div>` : emptyState(`'${esc(sel)}' 인물이 없어요`,'이 역할의 첫 인물을 추가해보세요.','＋ 인물 추가','openCastForm()');
   }
   $('#view').innerHTML = `<div class="view-inner">${chips}${body}</div>`;
+  hydrateImgs($('#view'));   // 카드 초상 로딩
 };
+/* 인물 상세 필드 정의(접이식 그룹). 컬럼은 ensureSchema가 자동 보강. */
+const CHAR_FIELD_GROUPS = [
+  {group:'기본 프로필', open:true, fields:[
+    {k:'name_hanja',l:'이름(한자)'},{k:'name_en',l:'이름(영문)'},
+    {k:'age',l:'나이'},{k:'affiliation',l:'소속(그룹/길드)'},
+    {k:'species',l:'종족'},{k:'job',l:'직업'},
+    {k:'position',l:'포지션',t:'select',opts:['','조력자','추종자','라이벌','대적자','기타']},
+    {k:'ability',l:'능력',t:'textarea'},
+    {k:'complex',l:'콤플렉스/결점',t:'textarea'},
+  ]},
+  {group:'성격·심리', fields:[
+    {k:'personality',l:'성격(키워드)',t:'textarea',ph:'예) 돈미새 / 냉소적이지만 정 많음'},
+    {k:'desire',l:'원하는 것(목표·욕망)',t:'textarea'},
+    {k:'reaction',l:'반응 패턴(어떤 상황 → 어떻게)',t:'textarea'},
+    {k:'family',l:'가족 현황·친밀도',t:'textarea'},
+    {k:'past',l:'과거·배경',t:'textarea'},
+    {k:'detail',l:'기타 메모',t:'textarea'},
+  ]},
+  {group:'외형', fields:[
+    {k:'app_eyes',l:'눈(모양·눈썹·색)'},{k:'app_hair',l:'머리(스타일·색)'},
+    {k:'app_body',l:'체형(키·몸무게)'},{k:'app_skin',l:'피부'},
+    {k:'app_marks',l:'흉터·특징점(눈물점 등)'},{k:'app_hands',l:'손·발'},
+    {k:'app_beard',l:'수염'},{k:'app_tattoo',l:'타투·피어싱'},
+    {k:'app_impression',l:'첫인상'},{k:'app_expression',l:'자주 짓는 표정'},
+    {k:'app_voice',l:'목소리'},{k:'app_outfit',l:'옷차림(평상복/작업복)'},
+    {k:'app_items',l:'자주 드는 아이템'},
+  ]},
+  {group:'말투·행동', fields:[
+    {k:'speech_habit',l:'말버릇'},
+    {k:'speech_samples',l:'대사 예시',t:'textarea',ph:'예) "그렇게 해야 되겠수?" / "캬하하! 너 마음에 든다!"'},
+    {k:'gesture',l:'제스처·행동 습관',t:'textarea',ph:'예) 고민할 때 턱을 쓰다듬는다'},
+  ]},
+];
+const CHAR_COLS = CHAR_FIELD_GROUPS.flatMap(g=>g.fields.map(f=>f.k));   // ensureSchema에서 컬럼 보강에 사용
+function charFieldHtml(f, c){
+  const val = (c && c[f.k]!=null) ? c[f.k] : '';
+  if(f.t==='select') return field(f.l, f.k, val||'', 'select', f.opts);
+  if(f.t==='textarea') return `<div class="field"><label>${f.l}</label><textarea name="${f.k}" ${f.ph?`placeholder="${esc(f.ph)}"`:''}>${esc(val)}</textarea></div>`;
+  return `<div class="field"><label>${f.l}</label><input name="${f.k}" value="${esc(val)}" ${f.ph?`placeholder="${esc(f.ph)}"`:''}></div>`;
+}
+/* 관계 (다른 인물 연결) */
+function relListHtml(charId){
+  const rows = all('SELECT * FROM char_relations WHERE work_id=? AND char_id=? ORDER BY id',[state.workId,charId]);
+  if(!rows.length) return '<span class="help" style="margin:0">아직 관계 없음</span>';
+  return rows.map(r=>`<div class="att-item att-link"><span>${r.target_id?'🔗 ':''}${esc(r.target_name||'?')}${r.relation?' — '+esc(r.relation):''}</span><button class="att-x" onclick="relRemove(${r.id},${charId})">✕</button></div>`).join('');
+}
+function relIncomingHtml(charId){
+  const inc = all("SELECT cr.relation rel, c.name src FROM char_relations cr JOIN characters c ON c.id=cr.char_id WHERE cr.work_id=? AND cr.target_id=? ORDER BY cr.id",[state.workId,charId]);
+  if(!inc.length) return '';
+  return `<p class="help" style="margin:8px 0 4px">← 이 인물을 향한 관계(다른 인물이 설정)</p>
+    <div class="att-list">${inc.map(r=>`<div class="att-item att-link"><span>${esc(r.src)}${r.rel?' → '+esc(r.rel):''}</span></div>`).join('')}</div>`;
+}
+function relSectionHtml(charId){
+  if(!charId) return `<div class="att-sec"><label class="set-sublabel">관계</label><p class="help" style="margin:0">저장하면 다른 인물과의 관계를 추가할 수 있어요.</p></div>`;
+  const others = all('SELECT name FROM characters WHERE work_id=? AND id<>? ORDER BY name',[state.workId,charId]);
+  return `<div class="att-sec"><label class="set-sublabel">관계 (다른 인물 연결)</label>
+    <div id="relList">${relListHtml(charId)}</div>
+    ${relIncomingHtml(charId)}
+    <datalist id="relChars">${others.map(o=>`<option value="${esc(o.name)}"></option>`).join('')}</datalist>
+    <div class="field-row" style="margin-top:8px">
+      <input id="relTarget" list="relChars" placeholder="대상 인물(이름)" style="flex:1">
+      <input id="relRel" placeholder="관계 (예: 라이벌)" style="flex:1">
+      <button class="btn ghost" type="button" onclick="relAdd(${charId})">＋</button>
+    </div></div>`;
+}
+function relAdd(charId){
+  const tn=($('#relTarget')?.value||'').trim(); const rel=($('#relRel')?.value||'').trim();
+  if(!tn){ toast('대상 인물을 입력하세요', true); return; }
+  const t = one('SELECT id FROM characters WHERE work_id=? AND name=?',[state.workId,tn]);
+  insert('INSERT INTO char_relations(work_id,char_id,target_id,target_name,relation,created_at) VALUES(?,?,?,?,?,?)',[state.workId,charId,t?t.id:null,tn,rel,now()]);
+  if($('#relTarget')) $('#relTarget').value=''; if($('#relRel')) $('#relRel').value='';
+  const el=$('#relList'); if(el) el.innerHTML=relListHtml(charId);
+}
+function relRemove(id, charId){ run('DELETE FROM char_relations WHERE id=?',[id]); const el=$('#relList'); if(el) el.innerHTML=relListHtml(charId); }
+
+/* 읽기 전용 첨부 표시(삭제 버튼 없음) */
+function attViewHtml(ot, oid){
+  const rows=attachList(ot,oid); if(!rows.length) return '';
+  return `<div class="cv-group"><div class="cv-gtitle">첨부</div><div class="att-list">${rows.map(a=>{
+    if(a.kind==='link') return `<div class="att-item att-link"><a href="${esc(a.url)}" target="_blank" rel="noopener">🔗 ${esc(a.name||a.url)}</a></div>`;
+    if(a.kind==='image') return `<div class="att-item att-image"><img data-aid="${a.id}" alt="${esc(a.name)}" onclick="openAttImage(${a.id})"></div>`;
+    return `<div class="att-item att-file"><button class="att-open" onclick="openAttFile(${a.id})">📄 ${esc(a.name)}</button></div>`;
+  }).join('')}</div></div>`;
+}
+/* 인물 읽기 전용 프로필 보기 */
+function openCastView(id){
+  const c=one('SELECT * FROM characters WHERE id=?',[id]); if(!c) return;
+  const pid=charPortrait(id);
+  const groups = CHAR_FIELD_GROUPS.map(g=>{
+    const items = g.fields.filter(f=>c[f.k]&&String(c[f.k]).trim());
+    if(!items.length) return '';
+    return `<div class="cv-group"><div class="cv-gtitle">${g.group}</div>${items.map(f=>`<div class="cv-row"><span class="cv-k">${f.l}</span><span class="cv-v">${esc(c[f.k])}</span></div>`).join('')}</div>`;
+  }).join('');
+  const out = all('SELECT target_name,relation FROM char_relations WHERE work_id=? AND char_id=? ORDER BY id',[state.workId,id]);
+  const inc = all("SELECT cr.relation rel, c.name src FROM char_relations cr JOIN characters c ON c.id=cr.char_id WHERE cr.work_id=? AND cr.target_id=? ORDER BY cr.id",[state.workId,id]);
+  const relHtml = (out.length||inc.length) ? `<div class="cv-group"><div class="cv-gtitle">관계</div>
+    ${out.map(r=>`<div class="cv-row"><span class="cv-k">${esc(r.target_name||'?')}</span><span class="cv-v">${esc(r.relation||'')}</span></div>`).join('')}
+    ${inc.map(r=>`<div class="cv-row"><span class="cv-k">← ${esc(r.src)}</span><span class="cv-v">${esc(r.rel||'')}</span></div>`).join('')}</div>` : '';
+  const body = groups+relHtml+attViewHtml('char',id);
+  openModal(`<div class="modal-head"><h3>${esc(c.name||'무명')}</h3><button class="icon-x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="cv-hero">
+        ${pid?`<img class="cv-portrait" data-aid="${pid}" alt="">`:`<div class="cv-noimg">${esc((c.name||'?').slice(0,1))}</div>`}
+        <div><div class="cv-role">${esc(c.role)}${c.position?' · '+esc(c.position):''}</div>${c.oneliner?`<p class="cv-oneliner">${esc(c.oneliner)}</p>`:''}</div>
+      </div>
+      ${body||'<p class="help">아직 입력된 상세가 없어요. 수정에서 채워보세요.</p>'}
+    </div>
+    <div class="modal-foot"><button class="btn ghost" onclick="openCastForm(${id})">✎ 수정</button><button class="btn primary" onclick="closeModal()">닫기</button></div>`);
+}
 function openCastForm(id){
   const c=id?one('SELECT * FROM characters WHERE id=?',[id]):{};
   const defRole = c.role || (state.charRole && state.charRole!=='전체' ? state.charRole : (catList('char').includes('조연')?'조연':(catList('char')[0]||'조연')));
   const roles = catList('char'); if(!roles.includes(defRole)) roles.unshift(defRole);
-  openModal(`<div class="modal-head"><h3>${id?'인물 수정':'새 인물'}</h3></div>
+  const groups = CHAR_FIELD_GROUPS.map(g=>`<details class="cf-group" ${g.open?'open':''}>
+      <summary>${g.group}</summary>
+      <div class="cf-body">${g.fields.map(f=>charFieldHtml(f,c)).join('')}</div>
+    </details>`).join('');
+  openModal(`<div class="modal-head"><h3>${id?'인물 수정':'새 인물'}</h3><button class="icon-x" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
       <div class="field-row">${field('이름','name',c.name)}${field('역할','role',defRole,'select',roles)}</div>
       ${field('한 줄 설정','oneliner',c.oneliner)}
-      ${field('상세 (외모·성격·관계·비밀 등)','detail',c.detail,'textarea')}
-      ${attachmentsSectionHtml('char', id)}
+      ${groups}
+      <details class="cf-group"><summary>관계 · 첨부</summary><div class="cf-body" style="display:block">
+        ${relSectionHtml(id)}
+        ${attachmentsSectionHtml('char', id)}
+      </div></details>
     </div>
     <div class="modal-foot">${id?`<button class="btn danger" onclick="delEntity('char',${id})">삭제</button>`:''}
       <button class="btn ghost" onclick="closeModal()">취소</button>
@@ -1864,8 +2099,14 @@ function openCastForm(id){
 }
 function saveCast(id){
   const v=formVals();
-  if(id) run('UPDATE characters SET name=?,role=?,oneliner=?,detail=?,updated_at=? WHERE id=?',[v.name,v.role,v.oneliner,v.detail,now(),id]);
-  else insert('INSERT INTO characters(work_id,name,role,oneliner,detail,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',[state.workId,v.name,v.role,v.oneliner,v.detail,now(),now()]);
+  if(!(v.name||'').trim()){ toast('이름을 입력해주세요', true); return; }
+  const cols = ['name','role','oneliner', ...CHAR_COLS];
+  const vals = cols.map(c=> v[c]!=null ? v[c] : '');
+  if(id){
+    run(`UPDATE characters SET ${cols.map(c=>c+'=?').join(',')}, updated_at=? WHERE id=?`, [...vals, now(), id]);
+  }else{
+    run(`INSERT INTO characters(work_id,${cols.join(',')},created_at,updated_at) VALUES(${cols.map(()=>'?').join(',')},?,?,?)`, [state.workId, ...vals, now(), now()]);
+  }
   closeModal(); go('cast'); toast('저장했어요');
 }
 
@@ -1997,7 +2238,7 @@ function loreSection(cat, items){
   return `<div class="arc"><div class="arc-title">${esc(cat)} <span style="font-size:11px;color:var(--mute);font-weight:600">${items.length}</span></div>
     <div class="card">${items.map(l=>`
       <div class="list-row" onclick="openLoreForm(${l.id})">
-        <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13.5px;margin-bottom:2px">${esc(l.title||'무제')}</div>
+        <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13.5px;margin-bottom:2px">${esc(l.title||'무제')}${attBadge('lore',l.id)}</div>
         <div style="font-size:12.5px;color:var(--paper-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.content||'')}</div></div>
       </div>`).join('')}</div></div>`;
 }
@@ -2049,7 +2290,7 @@ function plotSection(arc, items){
     <div class="card">${items.map(p=>`
       <div class="list-row plot-item" onclick="openPlotForm(${p.id})">
         <div class="dot ${p.status==='완료'?'done':p.status==='집필중'?'doing':''}"></div>
-        <div style="flex:1;min-width:0"><h4>${esc(p.title||'무제')}</h4><p>${esc(p.content||'')}</p></div>
+        <div style="flex:1;min-width:0"><h4>${esc(p.title||'무제')}${attBadge('plot',p.id)}</h4><p>${esc(p.content||'')}</p></div>
       </div>`).join('')}</div></div>`;
 }
 RENDER.plot = ()=>{
@@ -2123,7 +2364,7 @@ RENDER.time = ()=>{
         <div class="tl-node" style="background:${col}"></div>
         <div class="tl-card" style="border-color:${col}" onclick="openTimeForm(${e.id})">
           <div class="tl-meta"><span class="tl-when">${when||'시점 미정'}</span>${e.type?`<span class="tl-type" style="background:${col}1f;color:${col};border-color:${col}55">${esc(e.type)}</span>`:''}</div>
-          <h4>${esc(e.title||'무제')}</h4>
+          <h4>${esc(e.title||'무제')}${attBadge('timeline',e.id)}</h4>
           ${e.detail?`<p>${esc(e.detail)}</p>`:''}
           ${canMove?`<div class="tl-ops" onclick="event.stopPropagation()">
              <button onclick="timeMove(${e.id},-1)" ${i===0?'disabled':''}>↑</button>
@@ -2183,7 +2424,7 @@ RENDER.note = ()=>{
   $('#view').innerHTML=`<div class="view-inner">${
     rows.length?`<div class="cards">${rows.map(n=>`
       <div class="card entity" onclick="openNoteForm(${n.id})" style="border-color:${n.pinned?'var(--celadon)':'var(--line)'}">
-        <h4 style="margin-bottom:7px">${n.pinned?'📌 ':''}${esc(n.title||'무제')}</h4>
+        <h4 style="margin-bottom:7px">${n.pinned?'📌 ':''}${esc(n.title||'무제')}${attBadge('note',n.id)}</h4>
         <p>${esc(n.content||'')}</p></div>`).join('')}</div>`
     : emptyState('메모가 없어요','떠오른 아이디어, 설정 충돌, 독자 반응 등 가볍게 적어두세요.','첫 메모','openNoteForm()')
   }</div>`;
@@ -2206,6 +2447,59 @@ function saveNote(id){
   if(id) run('UPDATE notes SET title=?,content=?,pinned=?,updated_at=? WHERE id=?',[v.title,v.content,pinned,now(),id]);
   else insert('INSERT INTO notes(work_id,title,content,pinned,created_at,updated_at) VALUES(?,?,?,?,?,?)',[state.workId,v.title,v.content,pinned,now(),now()]);
   closeModal(); go('note'); toast('저장했어요');
+}
+
+/* ====================================================================
+   통합 검색 (현재 작품 내)
+   ==================================================================== */
+const SEARCH_DEFS=[
+  {type:'char',     label:'등장인물', cols:['name','oneliner','detail','personality','past'], title:'name'},
+  {type:'lore',     label:'세계관',   cols:['title','content'], title:'title'},
+  {type:'plot',     label:'플롯',     cols:['title','content'], title:'title'},
+  {type:'chapter',  label:'회차',     cols:['title','content'], title:'title'},
+  {type:'note',     label:'메모',     cols:['title','content'], title:'title'},
+  {type:'timeline', label:'연표',     cols:['title','detail'],  title:'title'},
+];
+function openSearch(){
+  if(!state.workId){ toast('작품을 먼저 여세요', true); return; }
+  openModal(`<div class="modal-head"><h3>검색 <span style="font-size:12px;color:var(--mute);font-weight:500">· 현재 작품 내</span></h3><button class="icon-x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="field"><input id="searchInput" placeholder="인물·세계관·플롯·회차·메모·연표 검색" oninput="runSearch(this.value)" autocomplete="off"></div>
+      <div id="searchResults"><p class="help">두 글자 이상 입력하면 검색돼요.</p></div>
+    </div>
+    <div class="modal-foot"><button class="btn primary" onclick="closeModal()">닫기</button></div>`);
+  setTimeout(()=>{ const i=$('#searchInput'); if(i) i.focus(); }, 60);
+}
+function searchSnip(r, cols, q){
+  const lq=q.toLowerCase();
+  for(const c of cols){ const v=r[c]; if(v && String(v).toLowerCase().includes(lq)){ const s=String(v).replace(/\s+/g,' '); const i=s.toLowerCase().indexOf(lq); return (i>20?'…':'')+s.slice(Math.max(0,i-20), i+50); } }
+  return '';
+}
+function runSearch(q){
+  q=(q||'').trim(); const box=$('#searchResults'); if(!box) return;
+  if(q.length<2){ box.innerHTML='<p class="help">두 글자 이상 입력하면 검색돼요.</p>'; return; }
+  const like='%'+q+'%'; let html=''; let total=0;
+  SEARCH_DEFS.forEach(d=>{
+    const tbl=ATTACH_OWNERS[d.type].table;
+    const where=d.cols.map(c=>`${c} LIKE ?`).join(' OR ');
+    let rows=[]; try{ rows=all(`SELECT * FROM ${tbl} WHERE work_id=? AND (${where})`, [state.workId, ...d.cols.map(()=>like)]); }catch(e){}
+    if(!rows.length) return; total+=rows.length;
+    html+=`<div class="cv-group"><div class="cv-gtitle">${d.label} (${rows.length})</div>${rows.map(r=>{
+      const ttl=d.type==='chapter' ? `${r.no}화 ${r.title||'무제'}` : (r[d.title]||'무제');
+      const snip=searchSnip(r,d.cols,q);
+      return `<div class="list-row" onclick="searchGo('${d.type}',${r.id})"><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px">${esc(ttl)}</div>${snip?`<div style="font-size:12px;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(snip)}</div>`:''}</div></div>`;
+    }).join('')}</div>`;
+  });
+  box.innerHTML = total ? html : '<p class="help">결과가 없어요.</p>';
+}
+function searchGo(type, id){
+  closeModal(); go(ATTACH_OWNERS[type].view);
+  if(type==='char') openCastView(id);
+  else if(type==='lore') openLoreForm(id);
+  else if(type==='plot') openPlotForm(id);
+  else if(type==='note') openNoteForm(id);
+  else if(type==='timeline') openTimeForm(id);
+  else if(type==='chapter') openChapter(id);
 }
 
 /* ====================================================================
