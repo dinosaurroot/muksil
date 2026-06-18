@@ -469,8 +469,12 @@ nav .navitem.active .count{color:var(--celadon)}
    ==================================================================== */
 "use strict";
 
-const APP_VERSION = 'v0.4.2';
+const APP_VERSION = 'v0.4.3';
 const APP_UPDATED = '2026-06-18';
+// ★ 기본 OAuth Client ID — 여기에 적어두면 모든 기기/브라우저에서 자동으로 채워져 재입력 불필요.
+//    Client ID는 비밀이 아닌 공개 식별자라 코드에 박아도 안전(로그인·동의는 각자 본인 구글 계정에서, 테스트 사용자만 통과).
+//    바꾸려면 이 한 줄만 수정. 비우면('') 예전처럼 설정에서 직접 입력.
+const DEFAULT_CLIENT_ID = '806316722531-74mhinip8crgs8frlmmk1g2q8skulam1.apps.googleusercontent.com';
 const SCHEMA_VERSION = 3;
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS works(
@@ -529,8 +533,12 @@ const gauth = { token:null, exp:0 };
 let tokenClient = null;
 let driveDbFileId = null;        // 현재 .db 의 Drive 파일 ID
 function loadCfg(){
-  try{ return Object.assign({clientId:'',apiKey:'',appId:'',folderId:'',folderName:'',mode:'local'}, JSON.parse(localStorage.getItem('muksil-drive')||'{}')); }
-  catch(e){ return {clientId:'',apiKey:'',appId:'',folderId:'',folderName:'',mode:'local'}; }
+  const base = {clientId:'',apiKey:'',appId:'',folderId:'',folderName:'',mode:'local'};
+  let c;
+  try{ c = Object.assign(base, JSON.parse(localStorage.getItem('muksil-drive')||'{}')); }
+  catch(e){ c = base; }
+  if(!c.clientId) c.clientId = DEFAULT_CLIENT_ID;   // 저장된 값이 없으면 코드의 기본 Client ID로
+  return c;
 }
 function saveCfg(){ try{ localStorage.setItem('muksil-drive', JSON.stringify(cfg)); }catch(e){} }
 
