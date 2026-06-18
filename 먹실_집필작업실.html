@@ -394,6 +394,17 @@ nav .navitem.active .count{color:var(--celadon)}
 .tl-ops button{width:28px;height:26px;border-radius:5px;background:var(--ink-2);border:1px solid var(--line);color:var(--paper-dim);font-weight:700}
 .tl-ops button:hover:not(:disabled){border-color:var(--celadon-deep);color:var(--paper)}
 .tl-ops button:disabled{opacity:.3}
+/* 첨부 */
+.att-sec{margin-top:16px;padding-top:14px;border-top:1px solid var(--line-soft)}
+.att-list{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
+.att-item{position:relative;display:inline-flex;align-items:center}
+.att-item .att-x{position:absolute;top:-7px;right:-7px;width:19px;height:19px;border-radius:50%;background:var(--ink-2);border:1px solid var(--line);color:var(--paper-dim);font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:2}
+.att-item .att-x:hover{background:var(--celadon-deep);color:#fff}
+.att-image img{max-width:140px;max-height:140px;border-radius:8px;border:1px solid var(--line);object-fit:cover;display:block;background:var(--ink-2)}
+.att-image img.att-missing{width:120px;height:80px;display:flex}
+.att-link a,.att-file .att-open{display:inline-block;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--ink-3);font-size:12.5px;font-weight:700;color:var(--paper)}
+.att-link a{color:var(--celadon)}
+.att-file .att-open:hover,.att-link a:hover{border-color:var(--celadon-deep)}
 .help{font-size:11.5px;color:var(--mute-2);line-height:1.55;margin-top:6px}
 .help a{color:var(--celadon)}
 /* 설정 그룹 (VS Code식 항목별 구분) */
@@ -505,13 +516,13 @@ nav .navitem.active .count{color:var(--celadon)}
    ==================================================================== */
 "use strict";
 
-const APP_VERSION = 'v0.8.3';
+const APP_VERSION = 'v0.9.0';
 const APP_UPDATED = '2026-06-18';
 // ★ 기본 OAuth Client ID — 여기에 적어두면 모든 기기/브라우저에서 자동으로 채워져 재입력 불필요.
 //    Client ID는 비밀이 아닌 공개 식별자라 코드에 박아도 안전(로그인·동의는 각자 본인 구글 계정에서, 테스트 사용자만 통과).
 //    바꾸려면 이 한 줄만 수정. 비우면('') 예전처럼 설정에서 직접 입력.
 const DEFAULT_CLIENT_ID = '806316722531-74mhinip8crgs8frlmmk1g2q8skulam1.apps.googleusercontent.com';
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS works(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -552,6 +563,12 @@ CREATE TABLE IF NOT EXISTS timeline(
   id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
   date TEXT, time TEXT, title TEXT, detail TEXT, type TEXT,
   sort INTEGER DEFAULT 0, created_at TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS attachments(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
+  owner_type TEXT, owner_id INTEGER, kind TEXT,
+  name TEXT, rel_path TEXT, url TEXT, mime TEXT, drive_id TEXT,
+  size INTEGER, sort INTEGER DEFAULT 0, created_at TEXT
 );
 CREATE TABLE IF NOT EXISTS plots(
   id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
@@ -1362,8 +1379,8 @@ function logWriting(workId, delta){
 /* ====================================================================
    모달 / 폼
    ==================================================================== */
-function openModal(html){ $('#modal').innerHTML=html; $('#overlay').classList.add('show'); }
-function closeModal(){ $('#overlay').classList.remove('show'); }
+function openModal(html){ $('#modal').innerHTML=html; $('#overlay').classList.add('show'); hydrateAtts(); }
+function closeModal(){ $('#overlay').classList.remove('show'); revokeAttURLs(); }
 $('#overlay').onclick = e=>{ if(e.target.id==='overlay') closeModal(); };
 
 function field(label, name, value='', type='text', opts){
@@ -1372,6 +1389,147 @@ function field(label, name, value='', type='text', opts){
   return `<div class="field"><label>${label}</label><input name="${name}" type="${type}" value="${esc(value)}"></div>`;
 }
 function formVals(){ const o={}; $$('#modal [name]').forEach(el=>o[el.name]=el.value); return o; }
+
+/* ====================================================================
+   첨부 (사진·파일·링크) — DB는 참조만, 파일은 <작품제목>/<메뉴폴더>/ 아래
+   ==================================================================== */
+const ATTACH_OWNERS = {
+  char:    {folder:'등장인물', table:'characters', view:'cast'},
+  lore:    {folder:'세계관',   table:'lore',       view:'lore'},
+  plot:    {folder:'플롯',     table:'plots',      view:'plot'},
+  chapter: {folder:'회차',     table:'chapters',   view:'write'},
+  note:    {folder:'메모',     table:'notes',      view:'note'},
+  timeline:{folder:'연표',     table:'timeline',   view:'time'},
+  work:    {folder:'작품',     table:'works',      view:'dash'},
+};
+function assetRoot(){ return titleFromFile(currentFilename()); }   // 현재 작품 제목 폴더
+async function localSubdir(parts, create){ let h=dirHandle; for(const p of parts){ h=await h.getDirectoryHandle(p,{create:!!create}); } return h; }
+/* 파일 저장 → {rel_path, drive_id, mime, size, name} */
+async function attachSave(ownerType, file){
+  const folder = ATTACH_OWNERS[ownerType].folder;
+  const ext = (String(file.name).match(/\.[^.\\/]+$/)||[''])[0];
+  const stored = `att_${Date.now()}_${Math.random().toString(36).slice(2,6)}${ext}`;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const rel_path = `${folder}/${stored}`; let drive_id=null;
+  if(isDrive()){
+    const root = await driveEnsureSubfolder(cfg.folderId, assetRoot());
+    const sub  = await driveEnsureSubfolder(root.id, folder);
+    drive_id = (await driveCreateFile(stored, bytes, sub.id)).id;
+  }else if(dirHandle){
+    const dir = await localSubdir([assetRoot(), folder], true);
+    const fh = await dir.getFileHandle(stored,{create:true});
+    const w = await fh.createWritable(); await w.write(bytes); await w.close();
+  }else throw new Error('작업 위치(폴더/Drive)가 필요해요');
+  return {rel_path, drive_id, mime:file.type||'', size:file.size, name:file.name};
+}
+async function attachBlob(att){   // → Blob | null (폴더/파일 없으면 null, 견딤)
+  try{
+    if(isDrive() && att.drive_id) return new Blob([await driveReadFile(att.drive_id)], {type:att.mime||''});
+    if(dirHandle){
+      const parts=[assetRoot(), ...String(att.rel_path).split('/')];
+      let h=dirHandle; for(let i=0;i<parts.length-1;i++) h=await h.getDirectoryHandle(parts[i]);
+      return await (await h.getFileHandle(parts[parts.length-1])).getFile();
+    }
+  }catch(e){}
+  return null;
+}
+async function attachDeleteFile(att){
+  try{
+    if(isDrive() && att.drive_id){ await driveDeleteFile(att.drive_id); return; }
+    if(dirHandle){
+      const parts=[assetRoot(), ...String(att.rel_path).split('/')];
+      let h=dirHandle; for(let i=0;i<parts.length-1;i++) h=await h.getDirectoryHandle(parts[i]);
+      await h.removeEntry(parts[parts.length-1]);
+    }
+  }catch(e){}
+}
+function attachList(ownerType, ownerId){ return all('SELECT * FROM attachments WHERE work_id=? AND owner_type=? AND owner_id=? ORDER BY sort,id',[state.workId,ownerType,+ownerId]); }
+/* 항목 삭제 시 첨부 연쇄 삭제 */
+async function attachDeleteFor(ownerType, ownerId){
+  const rows = attachList(ownerType, ownerId);
+  for(const a of rows){ if(a.kind!=='link') await attachDeleteFile(a); }
+  run('DELETE FROM attachments WHERE work_id=? AND owner_type=? AND owner_id=?',[state.workId,ownerType,+ownerId]);
+}
+
+/* ----- UI 컴포넌트 (모든 폼에서 재사용) ----- */
+function attachmentsSectionHtml(ownerType, ownerId){
+  if(!ownerId) return `<div class="att-sec"><label class="set-sublabel">첨부</label><p class="help" style="margin:0">먼저 <b>저장</b>하면 사진·파일·링크를 첨부할 수 있어요.</p></div>`;
+  return `<div class="att-sec">
+    <label class="set-sublabel">첨부 (사진·파일·링크)</label>
+    <div class="att-list" id="attList">${attListHtml(ownerType,ownerId)}</div>
+    <div class="field-row" style="margin-top:8px">
+      <input type="file" id="attFileInput" style="display:none" onchange="attachAddFile('${ownerType}',${+ownerId},this.files&&this.files[0]);this.value='';">
+      <button class="btn ghost" type="button" onclick="document.getElementById('attFileInput').click()">📎 사진·파일</button>
+      <button class="btn ghost" type="button" onclick="attachAddLink('${ownerType}',${+ownerId})">🔗 링크</button>
+    </div>
+  </div>`;
+}
+function attListHtml(ownerType, ownerId){
+  const rows = attachList(ownerType, ownerId);
+  if(!rows.length) return '<span class="help" style="margin:0">아직 첨부 없음</span>';
+  return rows.map(a=>{
+    const x = `<button class="att-x" title="삭제" onclick="attachRemove(${a.id},'${ownerType}',${+ownerId})">✕</button>`;
+    if(a.kind==='link') return `<div class="att-item att-link"><a href="${esc(a.url)}" target="_blank" rel="noopener">🔗 ${esc(a.name||a.url)}</a>${x}</div>`;
+    if(a.kind==='image') return `<div class="att-item att-image"><img data-aid="${a.id}" alt="${esc(a.name)}">${x}</div>`;
+    return `<div class="att-item att-file"><button class="att-open" onclick="openAttFile(${a.id})">📄 ${esc(a.name)}</button>${x}</div>`;
+  }).join('');
+}
+function renderAttList(ownerType, ownerId){ const el=$('#attList'); if(el){ el.innerHTML=attListHtml(ownerType,ownerId); hydrateAtts(); } }
+let attURLs=[];
+async function hydrateAtts(){
+  for(const img of $$('#modal img[data-aid]')){
+    if(img.src) continue;
+    const a = one('SELECT * FROM attachments WHERE id=?',[+img.dataset.aid]); if(!a) continue;
+    const blob = await attachBlob(a);
+    if(blob){ const u=URL.createObjectURL(blob); attURLs.push(u); img.src=u; }
+    else { img.alt='(파일 없음)'; img.classList.add('att-missing'); }
+  }
+}
+function revokeAttURLs(){ attURLs.forEach(u=>{try{URL.revokeObjectURL(u)}catch(e){}}); attURLs=[]; }
+async function openAttFile(id){
+  const a=one('SELECT * FROM attachments WHERE id=?',[id]); if(!a) return;
+  const blob = await attachBlob(a);
+  if(!blob){ toast('파일을 찾을 수 없어요(폴더 이동/삭제?)', true); return; }
+  const u=URL.createObjectURL(blob); window.open(u,'_blank','noopener');
+  setTimeout(()=>{try{URL.revokeObjectURL(u)}catch(e){}}, 60000);
+}
+async function attachAddFile(ownerType, ownerId, file){
+  if(!file) return;
+  if(!hasLocation()){ toast('작업 위치(폴더/Drive)가 필요해요', true); return; }
+  try{
+    const s = await attachSave(ownerType, file);
+    const kind = (s.mime||'').startsWith('image/') ? 'image' : 'file';
+    const mx = one('SELECT COALESCE(MAX(sort),-1) m FROM attachments WHERE work_id=? AND owner_type=? AND owner_id=?',[state.workId,ownerType,+ownerId]).m;
+    insert('INSERT INTO attachments(work_id,owner_type,owner_id,kind,name,rel_path,url,mime,drive_id,size,sort,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+      [state.workId,ownerType,+ownerId,kind,s.name,s.rel_path,null,s.mime,s.drive_id,s.size,mx+1,now()]);
+    renderAttList(ownerType, ownerId); toast('첨부했어요');
+  }catch(e){ toast('첨부 실패: '+e.message, true); }
+}
+function attachAddLink(ownerType, ownerId){
+  const url=(prompt('링크 URL (https://…)')||'').trim(); if(!url) return;
+  const name=(prompt('표시 이름(선택)', url)||url).trim();
+  const mx = one('SELECT COALESCE(MAX(sort),-1) m FROM attachments WHERE work_id=? AND owner_type=? AND owner_id=?',[state.workId,ownerType,+ownerId]).m;
+  insert('INSERT INTO attachments(work_id,owner_type,owner_id,kind,name,rel_path,url,mime,drive_id,size,sort,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+    [state.workId,ownerType,+ownerId,'link',name,null,url,null,null,null,mx+1,now()]);
+  renderAttList(ownerType, ownerId);
+}
+async function attachRemove(id, ownerType, ownerId){
+  if(!confirm('이 첨부를 삭제할까요?')) return;
+  const a=one('SELECT * FROM attachments WHERE id=?',[id]); if(!a) return;
+  if(a.kind!=='link') await attachDeleteFile(a);
+  run('DELETE FROM attachments WHERE id=?',[id]);
+  renderAttList(ownerType, ownerId);
+}
+/* 항목(인물/세계관/…) 삭제 — 첨부까지 연쇄 */
+function delEntity(ownerType, id){
+  if(!confirm('삭제할까요? 첨부 파일도 함께 삭제됩니다.')) return;
+  const m=ATTACH_OWNERS[ownerType];
+  (async()=>{
+    try{ await attachDeleteFor(ownerType, id); }catch(e){}
+    run(`DELETE FROM ${m.table} WHERE id=?`,[id]);
+    closeModal(); go(m.view);
+  })();
+}
 
 /* ---------- 작품 폼 ---------- */
 function openWorkForm(id){
@@ -1698,8 +1856,9 @@ function openCastForm(id){
       <div class="field-row">${field('이름','name',c.name)}${field('역할','role',defRole,'select',roles)}</div>
       ${field('한 줄 설정','oneliner',c.oneliner)}
       ${field('상세 (외모·성격·관계·비밀 등)','detail',c.detail,'textarea')}
+      ${attachmentsSectionHtml('char', id)}
     </div>
-    <div class="modal-foot">${id?`<button class="btn danger" onclick="run('DELETE FROM characters WHERE id=?',[${id}]);closeModal();go('cast')">삭제</button>`:''}
+    <div class="modal-foot">${id?`<button class="btn danger" onclick="delEntity('char',${id})">삭제</button>`:''}
       <button class="btn ghost" onclick="closeModal()">취소</button>
       <button class="btn primary" onclick="saveCast(${id||0})">저장</button></div>`);
 }
@@ -1869,8 +2028,9 @@ function openLoreForm(id){
     <div class="modal-body">
       <div class="field-row">${field('카테고리','category',defCat,'select',cats)}${field('제목','title',l.title)}</div>
       ${field('내용','content',l.content,'textarea')}
+      ${attachmentsSectionHtml('lore', id)}
     </div>
-    <div class="modal-foot">${id?`<button class="btn danger" onclick="run('DELETE FROM lore WHERE id=?',[${id}]);closeModal();go('lore')">삭제</button>`:''}
+    <div class="modal-foot">${id?`<button class="btn danger" onclick="delEntity('lore',${id})">삭제</button>`:''}
       <button class="btn ghost" onclick="closeModal()">취소</button>
       <button class="btn primary" onclick="saveLore(${id||0})">저장</button></div>`);
 }
@@ -1919,8 +2079,9 @@ function openPlotForm(id){
       ${field('제목','title',p.title)}
       ${field('전개·사건','content',p.content,'textarea')}
       ${field('정렬 순서','sort',p.sort||0,'number')}
+      ${attachmentsSectionHtml('plot', id)}
     </div>
-    <div class="modal-foot">${id?`<button class="btn danger" onclick="run('DELETE FROM plots WHERE id=?',[${id}]);closeModal();go('plot')">삭제</button>`:''}
+    <div class="modal-foot">${id?`<button class="btn danger" onclick="delEntity('plot',${id})">삭제</button>`:''}
       <button class="btn ghost" onclick="closeModal()">취소</button>
       <button class="btn primary" onclick="savePlot(${id||0})">저장</button></div>`);
 }
@@ -1990,8 +2151,9 @@ function openTimeForm(id){
       <div class="field-row">${field('사건명','title',e.title)}${field('유형','type',defType,'select',types)}</div>
       ${field('상세','detail',e.detail,'textarea')}
       ${mode==='free'?field('정렬 순서(작을수록 위)','sort',e.sort||0,'number'):''}
+      ${attachmentsSectionHtml('timeline', id)}
     </div>
-    <div class="modal-foot">${id?`<button class="btn danger" onclick="run('DELETE FROM timeline WHERE id=?',[${id}]);closeModal();go('time')">삭제</button>`:''}
+    <div class="modal-foot">${id?`<button class="btn danger" onclick="delEntity('timeline',${id})">삭제</button>`:''}
       <button class="btn ghost" onclick="closeModal()">취소</button>
       <button class="btn primary" onclick="saveTime(${id||0})">저장</button></div>`);
 }
@@ -2033,8 +2195,9 @@ function openNoteForm(id){
       ${field('제목','title',n.title)}
       ${field('내용','content',n.content,'textarea')}
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" name="pinned" ${n.pinned?'checked':''} style="width:auto"> 상단 고정</label>
+      ${attachmentsSectionHtml('note', id)}
     </div>
-    <div class="modal-foot">${id?`<button class="btn danger" onclick="run('DELETE FROM notes WHERE id=?',[${id}]);closeModal();go('note')">삭제</button>`:''}
+    <div class="modal-foot">${id?`<button class="btn danger" onclick="delEntity('note',${id})">삭제</button>`:''}
       <button class="btn ghost" onclick="closeModal()">취소</button>
       <button class="btn primary" onclick="saveNote(${id||0})">저장</button></div>`);
 }
