@@ -357,6 +357,26 @@ nav .navitem.active .count{color:var(--celadon)}
 .seg{display:flex;background:var(--ink-3);border:1px solid var(--line);border-radius:var(--radius-sm);padding:3px;gap:3px}
 .seg button{flex:1;padding:8px;border-radius:5px;font-size:12.5px;font-weight:700;color:var(--mute)}
 .seg button.on{background:var(--celadon);color:#0e1814}
+/* 카테고리 칩 (세계관 등 화면 내 다층 메뉴) */
+.cat-chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:9px;margin-bottom:16px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.cat-chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:999px;border:1px solid var(--line);background:var(--ink-3);color:var(--paper-dim);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:.12s}
+.cat-chip:hover{border-color:var(--celadon-deep);color:var(--paper)}
+.cat-chip.on{background:var(--celadon);border-color:var(--celadon);color:#0e1814}
+.cat-chip .n{font-size:11px;font-weight:800;opacity:.65}
+.cat-chip.on .n{opacity:.85}
+/* 설정: 카테고리 편집(행 레이아웃) */
+.set-sub{margin-top:16px;padding-top:14px;border-top:1px solid var(--line-soft)}
+.set-sublabel{display:block;font-size:12.5px;font-weight:700;color:var(--paper-dim);margin-bottom:9px}
+.cat-rows{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden}
+.cat-row{display:flex;align-items:center;gap:6px;padding:6px 8px 6px 4px;border-bottom:1px solid var(--line-soft)}
+.cat-row:last-child{border-bottom:0}
+.cat-row .nm{flex:1;text-align:left;font-size:13px;font-weight:700;color:var(--paper);padding:5px 8px;border-radius:5px}
+.cat-row .nm:hover{background:var(--ink-3)}
+.cat-row .ops{display:flex;gap:3px}
+.cat-row .ops button{width:26px;height:26px;border-radius:5px;background:var(--ink-3);border:1px solid var(--line);color:var(--paper-dim);font-size:13px;font-weight:700}
+.cat-row .ops button:hover:not(:disabled){border-color:var(--celadon-deep);color:var(--paper)}
+.cat-row .ops button:disabled{opacity:.32}
+.cat-row .ops .del:hover{border-color:var(--celadon-deep);color:#fff;background:var(--celadon-deep)}
 .help{font-size:11.5px;color:var(--mute-2);line-height:1.55;margin-top:6px}
 .help a{color:var(--celadon)}
 /* 설정 그룹 (VS Code식 항목별 구분) */
@@ -468,13 +488,13 @@ nav .navitem.active .count{color:var(--celadon)}
    ==================================================================== */
 "use strict";
 
-const APP_VERSION = 'v0.5.2';
+const APP_VERSION = 'v0.7.0';
 const APP_UPDATED = '2026-06-18';
 // ★ 기본 OAuth Client ID — 여기에 적어두면 모든 기기/브라우저에서 자동으로 채워져 재입력 불필요.
 //    Client ID는 비밀이 아닌 공개 식별자라 코드에 박아도 안전(로그인·동의는 각자 본인 구글 계정에서, 테스트 사용자만 통과).
 //    바꾸려면 이 한 줄만 수정. 비우면('') 예전처럼 설정에서 직접 입력.
 const DEFAULT_CLIENT_ID = '806316722531-74mhinip8crgs8frlmmk1g2q8skulam1.apps.googleusercontent.com';
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 5;
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS works(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -502,6 +522,14 @@ CREATE TABLE IF NOT EXISTS lore(
   id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
   category TEXT DEFAULT '세계관', title TEXT, content TEXT,
   created_at TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS lore_cats(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
+  name TEXT, sort INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS cats(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
+  kind TEXT, name TEXT, sort INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS plots(
   id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
@@ -600,6 +628,8 @@ function ensureSchema(){
     db.run("INSERT OR REPLACE INTO meta(key,value) VALUES('schema_version',?)",[String(SCHEMA_VERSION)]);
     changed = true;
   }
+  // 카테고리(cats) 백필: 작품은 있는데 해당 kind가 비면 기본값+기존 데이터값으로 채움(기존 .db·레거시 lore_cats 호환)
+  if(backfillCats()) changed = true;
   if(changed) dirty = true;
 }
 function workUsesNoSpace(workId=state.workId){
@@ -764,6 +794,19 @@ async function driveRenameFile(fileId, newName){
 async function driveDeleteFile(fileId){
   await driveApi(`https://www.googleapis.com/drive/v3/files/${fileId}`, {method:'DELETE'});
 }
+async function driveMoveToFolder(fileId, addParent, removeParent, newName){
+  const p = new URLSearchParams({addParents:addParent, removeParents:removeParent, fields:'id,name,parents'});
+  const r = await driveApi(`https://www.googleapis.com/drive/v3/files/${fileId}?${p}`, {
+    method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(newName?{name:newName}:{})
+  });
+  return r.json();
+}
+async function driveEnsureSubfolder(parentId, name){
+  const q = encodeURIComponent(`name='${name.replace(/'/g,"\\'")}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`);
+  const r = await driveApi(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=1`);
+  const found = ((await r.json()).files || [])[0];
+  return found || await driveCreateFolder(name, parentId);
+}
 async function driveList(parentId){
   const q = encodeURIComponent(`'${parentId}' in parents and trashed=false`);
   const r = await driveApi(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType,modifiedTime,size)&orderBy=folder,name&pageSize=200`);
@@ -906,10 +949,32 @@ async function renameWorkFile(oldName, newName){
   return true;
 }
 
-/* 작품 파일 삭제 */
+/* 작품 파일 완전 삭제 (현재는 미사용 — trashWorkFile로 대체) */
 async function deleteWorkFile(entry){
   if(entry.driveId!=null) await driveDeleteFile(entry.driveId);
   else if(dirHandle) await dirHandle.removeEntry(entry.name).catch(()=>{});
+}
+
+/* 작품 파일을 '휴지통' 하위 폴더로 이동 (소프트 삭제) */
+const TRASH_NAME = '휴지통';
+function archivedName(name){
+  const stamp = new Date().toISOString().slice(0,16).replace('T',' ').replace(/:/g,'');  // 예: 2026-06-18 1430
+  const ext = /\.db\.gz$/i.test(name) ? '.db.gz' : '.db';
+  return `${titleFromFile(name)} (삭제 ${stamp})${ext}`;
+}
+async function trashWorkFile(entry){
+  const dest = archivedName(entry.name);
+  if(entry.driveId!=null){
+    const trash = await driveEnsureSubfolder(cfg.folderId, TRASH_NAME);
+    await driveMoveToFolder(entry.driveId, trash.id, cfg.folderId, dest);
+  }else if(dirHandle){
+    const trash = await dirHandle.getDirectoryHandle(TRASH_NAME, {create:true});
+    const src = entry.handle || await dirHandle.getFileHandle(entry.name);
+    const bytes = new Uint8Array(await (await src.getFile()).arrayBuffer());
+    const nh = await trash.getFileHandle(dest, {create:true});
+    const w = await nh.createWritable(); await w.write(bytes); await w.close();
+    await dirHandle.removeEntry(entry.name).catch(()=>{});
+  }
 }
 
 /* ---------- 작품 목록 / 새 작품 ---------- */
@@ -1019,6 +1084,9 @@ function openSettings(){
       <label class="checkline"><input type="checkbox" ${w.count_no_space!==0?'checked':''} onchange="setWorkSetting('count_no_space',this.checked?1:0)">
         <div><b>글자수는 공백 제외로 계산</b><span>끄면 공백 포함 글자수로 분량·진행률·집필기록을 계산해요.</span></div>
       </label>
+      ${catEditorHtml('lore')}
+      ${catEditorHtml('plot')}
+      ${catEditorHtml('char')}
     </div>` : '';
   const presetNames = [...Object.keys(COMPO_PRESETS), '직접'];
   const compoGroup = w ? `
@@ -1175,7 +1243,7 @@ function enterApp(){
 /* ====================================================================
    상태 / 라우팅
    ==================================================================== */
-const state = { view:'dash', workId:null, chapterId:null };
+const state = { view:'dash', workId:null, chapterId:null, loreCat:'전체', plotArc:'전체', charRole:'전체' };
 
 const VIEWS = [
   {id:'dash',  label:'대시보드', icon:'M3 12l9-9 9 9M5 10v10h14V10', count:null},
@@ -1284,7 +1352,7 @@ function openWorkForm(id){
       <p class="help">상태·목표 회차·목표 분량은 상단 <b>설정</b>의 ‘작품’ 항목에서 조절해요.</p>
     </div>
     <div class="modal-foot">
-      ${id?`<button class="btn danger" onclick="deleteWork(${id})">삭제</button>`:''}
+      ${id?`<button class="btn danger" onclick="deleteWork(${id})">🗑 휴지통으로</button>`:''}
       <button class="btn ghost" onclick="closeModal()">취소</button>
       <button class="btn primary" onclick="saveWork(${id||0})">저장</button>
     </div>`);
@@ -1318,15 +1386,15 @@ function saveWork(id){
   }
 }
 function deleteWork(id){
-  if(!confirm('이 작품 파일이 통째로 삭제됩니다. 계속할까요?\n(폴더의 .db 파일이 삭제돼요)')) return;
+  if(!confirm(`이 작품을 '${TRASH_NAME}' 폴더로 보낼까요?\n· 완전 삭제가 아니라 작업 폴더 안 '${TRASH_NAME}'로 이동돼요.\n· 되살리려면 그 폴더에서 파일을 다시 꺼내면 됩니다.`)) return;
   const entry = { name: currentFilename(), driveId: (isDrive()?driveDbFileId:undefined), handle: fileHandle };
   closeModal();
   (async()=>{
-    try{ await deleteWorkFile(entry); }
-    catch(e){ toast('삭제 실패: '+e.message, true); return; }
+    try{ await trashWorkFile(entry); }
+    catch(e){ toast('이동 실패: '+e.message, true); return; }
     db=null; fileHandle=null; driveDbFileId=null; dirty=false; cfg.lastWork=''; saveCfg();
     let rest=[]; try{ rest = await listWorkFiles(); }catch(e){}
-    toast('작품을 삭제했어요');
+    toast(`'${TRASH_NAME}'(으)로 보냈어요`);
     if(rest.length){ backToSplash(); showWorkList(); }
     else { backToSplash(); }
   })();
@@ -1556,25 +1624,39 @@ function chapterMemo(id){
 /* ====================================================================
    등장인물
    ==================================================================== */
+function castCard(c){
+  return `<div class="card entity" onclick="openCastForm(${c.id})">
+    <div class="top"><div class="av">${esc((c.name||'?').slice(0,1))}</div>
+      <div><h4>${esc(c.name||'무명')}</h4><div class="role">${esc(c.role)}</div></div></div>
+    <p>${c.oneliner?esc(c.oneliner):'<span style="opacity:.5">한 줄 설정을 적어보세요</span>'}</p>
+  </div>`;
+}
 RENDER.cast = ()=>{
   if(!state.workId){ $('#view').innerHTML=emptyState('작품을 먼저 만들어주세요','',''); return; }
   $('#topActions').innerHTML=`<button class="btn primary" onclick="openCastForm()">＋ 인물 추가</button>`;
-  const rows=all('SELECT * FROM characters WHERE work_id=? ORDER BY CASE role WHEN "주인공" THEN 0 WHEN "주연" THEN 1 WHEN "악역" THEN 2 ELSE 3 END, id',[state.workId]);
-  $('#view').innerHTML = `<div class="view-inner">${
-    rows.length ? `<div class="cards">${rows.map(c=>`
-      <div class="card entity" onclick="openCastForm(${c.id})">
-        <div class="top"><div class="av">${esc((c.name||'?').slice(0,1))}</div>
-          <div><h4>${esc(c.name||'무명')}</h4><div class="role">${esc(c.role)}</div></div></div>
-        <p>${c.oneliner?esc(c.oneliner):'<span style="opacity:.5">한 줄 설정을 적어보세요</span>'}</p>
-      </div>`).join('')}</div>`
-    : emptyState('등장인물이 없어요','주인공부터 조연·악역까지, 인물 설정을 모아두면 집필 중 빠르게 참고할 수 있어요.','첫 인물 추가','openCastForm()')
-  }</div>`;
+  const {cnt,total,present,sel} = catData('char');
+  const chips = catChipsHtml('char', sel, cnt, total, present);
+  let body;
+  if(!total){ body = emptyState('등장인물이 없어요','주인공부터 조연·악역까지, 인물 설정을 모아두면 집필 중 빠르게 참고할 수 있어요.','첫 인물 추가','openCastForm()'); }
+  else if(sel==='전체'){
+    const rows=all('SELECT * FROM characters WHERE work_id=?',[state.workId]);
+    const byRole={}; rows.forEach(r=>{(byRole[r.role]=byRole[r.role]||[]).push(r)});
+    body = present.filter(r=>byRole[r]&&byRole[r].length).map(role=>`
+      <div class="arc"><div class="arc-title">${esc(role)} <span style="font-size:11px;color:var(--mute);font-weight:600">${byRole[role].length}</span></div>
+        <div class="cards">${byRole[role].map(castCard).join('')}</div></div>`).join('');
+  }else{
+    const rows=all('SELECT * FROM characters WHERE work_id=? AND role=? ORDER BY id',[state.workId,sel]);
+    body = rows.length ? `<div class="cards">${rows.map(castCard).join('')}</div>` : emptyState(`'${esc(sel)}' 인물이 없어요`,'이 역할의 첫 인물을 추가해보세요.','＋ 인물 추가','openCastForm()');
+  }
+  $('#view').innerHTML = `<div class="view-inner">${chips}${body}</div>`;
 };
 function openCastForm(id){
   const c=id?one('SELECT * FROM characters WHERE id=?',[id]):{};
+  const defRole = c.role || (state.charRole && state.charRole!=='전체' ? state.charRole : (catList('char').includes('조연')?'조연':(catList('char')[0]||'조연')));
+  const roles = catList('char'); if(!roles.includes(defRole)) roles.unshift(defRole);
   openModal(`<div class="modal-head"><h3>${id?'인물 수정':'새 인물'}</h3></div>
     <div class="modal-body">
-      <div class="field-row">${field('이름','name',c.name)}${field('역할','role',c.role||'조연','select',['주인공','주연','악역','조연','단역'])}</div>
+      <div class="field-row">${field('이름','name',c.name)}${field('역할','role',defRole,'select',roles)}</div>
       ${field('한 줄 설정','oneliner',c.oneliner)}
       ${field('상세 (외모·성격·관계·비밀 등)','detail',c.detail,'textarea')}
     </div>
@@ -1592,26 +1674,147 @@ function saveCast(id){
 /* ====================================================================
    세계관·설정
    ==================================================================== */
-const LORE_CATS=['세계관','체계·능력','지역·세력','종족·집단','아이템','용어','연표'];
+/* ===== 공통 카테고리 시스템 (cats: kind=lore|plot|char) ===== */
+const DEFAULT_LORE_CATS=['세계관','체계·능력','지역·세력','종족·집단','아이템','용어','연표'];
+const DEFAULT_PLOT_ARCS=['1부 · 도입'];
+const DEFAULT_CHAR_ROLES=['주인공','주연','악역','조연','단역'];
+const CAT_KINDS={
+  lore:{table:'lore',       col:'category', defaults:DEFAULT_LORE_CATS,  label:'세계관 카테고리', hint:'세계관 화면 상단 메뉴(칩)가 이 목록으로 구성돼요.'},
+  plot:{table:'plots',      col:'arc',      defaults:DEFAULT_PLOT_ARCS,  label:'플롯 편(아크)',   hint:'플롯 화면이 이 편(아크)별로 묶여요.'},
+  char:{table:'characters', col:'role',     defaults:DEFAULT_CHAR_ROLES, label:'등장인물 역할',   hint:'등장인물 화면이 이 역할별로 묶여요.'},
+};
+const jsArg = s => String(s).replace(/\\/g,'\\\\').replace(/"/g,'&quot;').replace(/'/g,"\\'");
+const catStateField = kind => kind==='lore'?'loreCat':kind==='plot'?'plotArc':'charRole';
+function catList(kind){ return all('SELECT name FROM cats WHERE work_id=? AND kind=? ORDER BY sort,id',[state.workId,kind]).map(r=>r.name); }
+function seedCats(wid){ Object.entries(CAT_KINDS).forEach(([kind,m])=> m.defaults.forEach((name,i)=> db.run('INSERT INTO cats(work_id,kind,name,sort) VALUES(?,?,?,?)',[wid,kind,name,i]))); }
+function backfillCats(){
+  let added=0;
+  all('SELECT id FROM works').forEach(wk=>{
+    Object.entries(CAT_KINDS).forEach(([kind,m])=>{
+      if(one('SELECT COUNT(*) n FROM cats WHERE work_id=? AND kind=?',[wk.id,kind]).n>0) return;
+      let legacy=[];
+      if(kind==='lore'){ try{ legacy=all('SELECT name FROM lore_cats WHERE work_id=? ORDER BY sort,id',[wk.id]).map(r=>r.name);}catch(e){} }
+      const seed=(legacy.length?legacy:m.defaults).slice();
+      all(`SELECT DISTINCT ${m.col} v FROM ${m.table} WHERE work_id=? AND ${m.col} IS NOT NULL AND ${m.col}<>''`,[wk.id]).forEach(r=>{ if(!seed.includes(r.v)) seed.push(r.v); });
+      seed.forEach((name,i)=> db.run('INSERT INTO cats(work_id,kind,name,sort) VALUES(?,?,?,?)',[wk.id,kind,name,i]));
+      added+=seed.length;
+    });
+  });
+  return added>0;
+}
+function catAdd(kind){
+  const inp=$('#newCat-'+kind); const name=(inp?inp.value:'').trim();
+  if(!name){ toast('이름을 입력하세요',true); return; }
+  if(catList(kind).some(c=>c.toLowerCase()===name.toLowerCase())){ toast('이미 있어요',true); return; }
+  const mx=one('SELECT COALESCE(MAX(sort),-1) m FROM cats WHERE work_id=? AND kind=?',[state.workId,kind]).m;
+  run('INSERT INTO cats(work_id,kind,name,sort) VALUES(?,?,?,?)',[state.workId,kind,name,mx+1]);
+  openSettings();
+}
+function catRename(kind, idx){
+  const m=CAT_KINDS[kind], list=catList(kind), old=list[idx]; if(old==null) return;
+  const nn=(prompt('새 이름', old)||'').trim(); if(!nn||nn===old) return;
+  if(list.some((c,i)=>i!==idx && c.toLowerCase()===nn.toLowerCase())){ toast('이미 있는 이름이에요',true); return; }
+  run(`UPDATE ${m.table} SET ${m.col}=?, updated_at=? WHERE work_id=? AND ${m.col}=?`,[nn,now(),state.workId,old]);
+  run('UPDATE cats SET name=? WHERE work_id=? AND kind=? AND name=?',[nn,state.workId,kind,old]);
+  if(state[catStateField(kind)]===old) state[catStateField(kind)]=nn;
+  openSettings();
+}
+function catDelete(kind, idx){
+  const m=CAT_KINDS[kind], list=catList(kind), name=list[idx]; if(name==null) return;
+  const n=one(`SELECT COUNT(*) n FROM ${m.table} WHERE work_id=? AND ${m.col}=?`,[state.workId,name]).n;
+  if(n>0){
+    if(!confirm(`'${name}' 항목 ${n}개를 '미분류'로 옮기고 삭제할까요?`)) return;
+    run(`UPDATE ${m.table} SET ${m.col}='미분류', updated_at=? WHERE work_id=? AND ${m.col}=?`,[now(),state.workId,name]);
+    if(!catList(kind).includes('미분류')){
+      const mx=one('SELECT COALESCE(MAX(sort),-1) x FROM cats WHERE work_id=? AND kind=?',[state.workId,kind]).x;
+      run('INSERT INTO cats(work_id,kind,name,sort) VALUES(?,?,?,?)',[state.workId,kind,'미분류',mx+1]);
+    }
+  }else{ if(!confirm(`'${name}' 항목을 삭제할까요?`)) return; }
+  run('DELETE FROM cats WHERE work_id=? AND kind=? AND name=?',[state.workId,kind,name]);
+  if(state[catStateField(kind)]===name) state[catStateField(kind)]='전체';
+  openSettings();
+}
+function catMove(kind, idx, dir){
+  const rows=all('SELECT id FROM cats WHERE work_id=? AND kind=? ORDER BY sort,id',[state.workId,kind]);
+  const j=idx+dir; if(j<0||j>=rows.length) return;
+  [rows[idx],rows[j]]=[rows[j],rows[idx]];
+  rows.forEach((r,i)=> run('UPDATE cats SET sort=? WHERE id=?',[i,r.id]));
+  openSettings();
+}
+function catEditorHtml(kind){
+  const m=CAT_KINDS[kind], list=catList(kind);
+  const rows = list.length ? list.map((c,i)=>`<div class="cat-row">
+      <button class="nm" onclick="catRename('${kind}',${i})" title="이름 변경">${esc(c)}</button>
+      <div class="ops">
+        <button onclick="catMove('${kind}',${i},-1)" ${i===0?'disabled':''}>↑</button>
+        <button onclick="catMove('${kind}',${i},1)" ${i===list.length-1?'disabled':''}>↓</button>
+        <button class="del" onclick="catDelete('${kind}',${i})" title="삭제">✕</button>
+      </div></div>`).join('') : '<span class="help" style="margin:0">없음</span>';
+  return `<div class="set-sub">
+      <label class="set-sublabel">${m.label}</label>
+      <div class="cat-rows">${rows}</div>
+      <div class="field-row" style="margin-top:8px;align-items:stretch">
+        <input id="newCat-${kind}" placeholder="새 항목 이름" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();catAdd('${kind}');}">
+        <button class="btn ghost" style="white-space:nowrap" onclick="catAdd('${kind}')">＋ 추가</button>
+      </div>
+      <p class="help">${m.hint} 삭제 시 그 안의 항목은 '미분류'로 이동돼요.</p>
+    </div>`;
+}
+function setCat(kind, val){
+  state[catStateField(kind)]=val;
+  if(kind==='lore') RENDER.lore(); else if(kind==='plot') RENDER.plot(); else RENDER.cast();
+}
+function catChipsHtml(kind, sel, cnt, total, present){
+  const chip=(label,val,n)=>`<button class="cat-chip ${sel===val?'on':''}" onclick="setCat('${kind}','${jsArg(val)}')">${esc(label)}<span class="n">${n||0}</span></button>`;
+  return `<div class="cat-chips">${chip('전체','전체',total)}${present.map(c=>chip(c,c,cnt[c])).join('')}</div>`;
+}
+function catData(kind){
+  const m=CAT_KINDS[kind];
+  const cnt={}; all(`SELECT ${m.col} k, COUNT(*) n FROM ${m.table} WHERE work_id=? GROUP BY ${m.col}`,[state.workId]).forEach(r=>cnt[r.k]=r.n);
+  const total=Object.values(cnt).reduce((s,n)=>s+n,0);
+  const defined=catList(kind);
+  const present=defined.concat(Object.keys(cnt).filter(c=>c!=null && c!=='' && !defined.includes(c)));
+  let sel=state[catStateField(kind)]||'전체'; if(sel!=='전체' && !present.includes(sel)) sel='전체';
+  return {cnt,total,present,sel};
+}
+
+/* ====================================================================
+   세계관·설정
+   ==================================================================== */
+function loreSection(cat, items){
+  return `<div class="arc"><div class="arc-title">${esc(cat)} <span style="font-size:11px;color:var(--mute);font-weight:600">${items.length}</span></div>
+    <div class="card">${items.map(l=>`
+      <div class="list-row" onclick="openLoreForm(${l.id})">
+        <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13.5px;margin-bottom:2px">${esc(l.title||'무제')}</div>
+        <div style="font-size:12.5px;color:var(--paper-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.content||'')}</div></div>
+      </div>`).join('')}</div></div>`;
+}
 RENDER.lore = ()=>{
   if(!state.workId){ $('#view').innerHTML=emptyState('작품을 먼저 만들어주세요','',''); return; }
   $('#topActions').innerHTML=`<button class="btn primary" onclick="openLoreForm()">＋ 설정 추가</button>`;
-  const rows=all('SELECT * FROM lore WHERE work_id=? ORDER BY category,id',[state.workId]);
-  if(!rows.length){ $('#view').innerHTML=`<div class="view-inner">${emptyState('세계관 설정이 없어요','마법 체계, 지역, 세력, 핵심 용어… 설정을 카테고리별로 정리해두세요.','첫 설정 추가','openLoreForm()')}</div>`; return; }
-  const byCat={}; rows.forEach(r=>{(byCat[r.category]=byCat[r.category]||[]).push(r)});
-  $('#view').innerHTML=`<div class="view-inner">${Object.entries(byCat).map(([cat,items])=>`
-    <div class="arc"><div class="arc-title">${esc(cat)} <span style="font-size:11px;color:var(--mute);font-weight:600">${items.length}</span></div>
-      <div class="card">${items.map(l=>`
-        <div class="list-row" onclick="openLoreForm(${l.id})">
-          <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13.5px;margin-bottom:2px">${esc(l.title||'무제')}</div>
-          <div style="font-size:12.5px;color:var(--paper-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.content||'')}</div></div>
-        </div>`).join('')}</div></div>`).join('')}</div>`;
+  const {cnt,total,present,sel} = catData('lore');
+  const chips = catChipsHtml('lore', sel, cnt, total, present);
+  let body;
+  if(sel==='전체'){
+    if(!total){ body = emptyState('세계관 설정이 없어요','위 카테고리를 고르고 설정을 추가하거나, 설정에서 카테고리를 편집할 수 있어요.','첫 설정 추가','openLoreForm()'); }
+    else{
+      const rows=all('SELECT * FROM lore WHERE work_id=? ORDER BY category,id',[state.workId]);
+      const byCat={}; rows.forEach(r=>{(byCat[r.category]=byCat[r.category]||[]).push(r)});
+      body = present.filter(c=>byCat[c]&&byCat[c].length).map(c=>loreSection(c, byCat[c])).join('');
+    }
+  }else{
+    const items=all('SELECT * FROM lore WHERE work_id=? AND category=? ORDER BY id',[state.workId,sel]);
+    body = items.length ? loreSection(sel, items) : emptyState(`'${esc(sel)}' 항목이 없어요`,'이 카테고리에 첫 설정을 추가해보세요.','＋ 설정 추가','openLoreForm()');
+  }
+  $('#view').innerHTML=`<div class="view-inner">${chips}${body}</div>`;
 };
 function openLoreForm(id){
   const l=id?one('SELECT * FROM lore WHERE id=?',[id]):{};
+  const defCat = l.category || (state.loreCat && state.loreCat!=='전체' ? state.loreCat : (catList('lore')[0]||'세계관'));
+  const cats = catList('lore'); if(!cats.includes(defCat)) cats.unshift(defCat);
   openModal(`<div class="modal-head"><h3>${id?'설정 수정':'새 설정'}</h3></div>
     <div class="modal-body">
-      <div class="field-row">${field('카테고리','category',l.category||'세계관','select',LORE_CATS)}${field('제목','title',l.title)}</div>
+      <div class="field-row">${field('카테고리','category',defCat,'select',cats)}${field('제목','title',l.title)}</div>
       ${field('내용','content',l.content,'textarea')}
     </div>
     <div class="modal-foot">${id?`<button class="btn danger" onclick="run('DELETE FROM lore WHERE id=?',[${id}]);closeModal();go('lore')">삭제</button>`:''}
@@ -1628,25 +1831,38 @@ function saveLore(id){
 /* ====================================================================
    플롯
    ==================================================================== */
+function plotSection(arc, items){
+  return `<div class="arc"><div class="arc-title">${esc(arc)} <span style="font-size:11px;color:var(--mute);font-weight:600">${items.length}</span></div>
+    <div class="card">${items.map(p=>`
+      <div class="list-row plot-item" onclick="openPlotForm(${p.id})">
+        <div class="dot ${p.status==='완료'?'done':p.status==='집필중'?'doing':''}"></div>
+        <div style="flex:1;min-width:0"><h4>${esc(p.title||'무제')}</h4><p>${esc(p.content||'')}</p></div>
+      </div>`).join('')}</div></div>`;
+}
 RENDER.plot = ()=>{
   if(!state.workId){ $('#view').innerHTML=emptyState('작품을 먼저 만들어주세요','',''); return; }
   $('#topActions').innerHTML=`<button class="btn primary" onclick="openPlotForm()">＋ 플롯 추가</button>`;
-  const rows=all('SELECT * FROM plots WHERE work_id=? ORDER BY arc,sort,id',[state.workId]);
-  if(!rows.length){ $('#view').innerHTML=`<div class="view-inner">${emptyState('플롯이 없어요','편(아크)별로 주요 사건과 전개를 정리하면 장편 연재 흐름을 놓치지 않아요.','첫 플롯 추가','openPlotForm()')}</div>`; return; }
-  const byArc={}; rows.forEach(r=>{(byArc[r.arc]=byArc[r.arc]||[]).push(r)});
-  $('#view').innerHTML=`<div class="view-inner">${Object.entries(byArc).map(([arc,items])=>`
-    <div class="arc"><div class="arc-title">${esc(arc)}</div>
-      <div class="card">${items.map(p=>`
-        <div class="list-row plot-item" onclick="openPlotForm(${p.id})">
-          <div class="dot ${p.status==='완료'?'done':p.status==='집필중'?'doing':''}"></div>
-          <div style="flex:1;min-width:0"><h4>${esc(p.title||'무제')}</h4><p>${esc(p.content||'')}</p></div>
-        </div>`).join('')}</div></div>`).join('')}</div>`;
+  const {cnt,total,present,sel} = catData('plot');
+  const chips = catChipsHtml('plot', sel, cnt, total, present);
+  let body;
+  if(!total){ body = emptyState('플롯이 없어요','편(아크)별로 주요 사건과 전개를 정리하면 장편 연재 흐름을 놓치지 않아요.','첫 플롯 추가','openPlotForm()'); }
+  else if(sel==='전체'){
+    const rows=all('SELECT * FROM plots WHERE work_id=? ORDER BY arc,sort,id',[state.workId]);
+    const byArc={}; rows.forEach(r=>{(byArc[r.arc]=byArc[r.arc]||[]).push(r)});
+    body = present.filter(a=>byArc[a]&&byArc[a].length).map(a=>plotSection(a, byArc[a])).join('');
+  }else{
+    const items=all('SELECT * FROM plots WHERE work_id=? AND arc=? ORDER BY sort,id',[state.workId,sel]);
+    body = items.length ? plotSection(sel, items) : emptyState(`'${esc(sel)}' 플롯이 없어요`,'이 편(아크)에 첫 플롯을 추가해보세요.','＋ 플롯 추가','openPlotForm()');
+  }
+  $('#view').innerHTML=`<div class="view-inner">${chips}${body}</div>`;
 };
 function openPlotForm(id){
   const p=id?one('SELECT * FROM plots WHERE id=?',[id]):{};
+  const defArc = p.arc || (state.plotArc && state.plotArc!=='전체' ? state.plotArc : (catList('plot')[0]||'1부 · 도입'));
+  const arcs = catList('plot'); if(!arcs.includes(defArc)) arcs.unshift(defArc);
   openModal(`<div class="modal-head"><h3>${id?'플롯 수정':'새 플롯'}</h3></div>
     <div class="modal-body">
-      <div class="field-row">${field('편 (아크)','arc',p.arc||'본편')}${field('상태','status',p.status||'예정','select',['예정','집필중','완료'])}</div>
+      <div class="field-row">${field('편 (아크)','arc',defArc,'select',arcs)}${field('상태','status',p.status||'예정','select',['예정','집필중','완료'])}</div>
       ${field('제목','title',p.title)}
       ${field('전개·사건','content',p.content,'textarea')}
       ${field('정렬 순서','sort',p.sort||0,'number')}
@@ -1707,6 +1923,7 @@ function seedWork(fields){
      fields.logline||'한 줄로 후킹하는 로그라인을 적어보세요.',
      fields.synopsis||'전체 이야기의 흐름을 시놉시스에 정리해두면 연재가 흔들리지 않습니다.',
      '구상중',300,5500,now(),now()]);
+  seedCats(wid);
   insert('INSERT INTO characters(work_id,name,role,oneliner,detail,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',
     [wid,'주인공','주인공','평범하지만 한 가지 비밀을 가진 인물.','목표·결핍·성장 곡선을 적어두면 회차마다 일관성을 유지하기 좋아요.',now(),now()]);
   insert('INSERT INTO lore(work_id,category,title,content,created_at,updated_at) VALUES(?,?,?,?,?,?)',
