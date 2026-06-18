@@ -463,14 +463,13 @@ nav .navitem.active .count{color:var(--celadon)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/sql-wasm.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://apis.google.com/js/api.js" async defer></script>
 <script>
 /* ====================================================================
    먹실 — 장르소설 집필 작업실 (단일 HTML / sql.js / File System Access)
    ==================================================================== */
 "use strict";
 
-const APP_VERSION = 'v0.3.2';
+const APP_VERSION = 'v0.4.0';
 const APP_UPDATED = '2026-06-18';
 const SCHEMA_VERSION = 3;
 const SCHEMA = `
@@ -746,26 +745,6 @@ async function saveDbToDrive(bytes, filename){
   else { const c = await driveCreateFile(filename, bytes, cfg.folderId); driveDbFileId = c.id; }
 }
 
-/* === Picker: 작업 폴더 선택 === */
-function pickDriveFolder(){
-  return new Promise((resolve)=>{
-    if(!window.gapi){ toast('Picker 로드 중… 잠시 후 다시 시도하세요.', true); return resolve(null); }
-    if(!cfg.apiKey || !cfg.appId){ toast('API Key와 프로젝트 번호를 입력하세요.', true); return resolve(null); }
-    gapi.load('picker', ()=>{
-      const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
-        .setSelectFolderEnabled(true).setMimeTypes('application/vnd.google-apps.folder');
-      const picker = new google.picker.PickerBuilder()
-        .addView(view).setOAuthToken(gauth.token).setDeveloperKey(cfg.apiKey).setAppId(cfg.appId)
-        .setTitle('작업 폴더 선택')
-        .setCallback(data=>{
-          if(data.action===google.picker.Action.PICKED){ const d=data.docs[0]; resolve({id:d.id, name:d.name}); }
-          else if(data.action===google.picker.Action.CANCEL){ resolve(null); }
-        }).build();
-      picker.setVisible(true);
-    });
-  });
-}
-
 /* ====================================================================
    초기화 / 파일 열기·만들기
    ==================================================================== */
@@ -885,17 +864,14 @@ function driveSettingsHtml(connected){
       <button class="${cfg.mode==='drive'?'on':''}" onclick="setMode('drive')">Google Drive</button>
     </div>
     ${field('OAuth Client ID','clientId',cfg.clientId)}
-    ${field('API Key (Picker용)','apiKey',cfg.apiKey)}
-    ${field('프로젝트 번호 (Picker App ID)','appId',cfg.appId)}
     <div class="kv"><span>상태</span><span class="grow"></span>
       <b style="color:${connected?'var(--celadon)':'var(--mute)'}">${connected?'연결됨':'연결 안 됨'}</b></div>
     <div class="kv"><span>작업 폴더</span><span class="grow"><b>${cfg.folderName?esc(cfg.folderName):'미선택'}</b></span></div>
     <div class="field-row" style="margin-top:4px">
       <button class="btn ghost" style="flex:1;justify-content:center" onclick="saveDriveCfgThen('connect')">Drive 연결</button>
-      <button class="btn ghost" style="flex:1;justify-content:center" onclick="saveDriveCfgThen('folder')">폴더 선택</button>
+      <button class="btn primary" style="flex:1;justify-content:center" onclick="saveDriveCfgThen('autoFolder')">폴더 연결</button>
     </div>
-    <div style="margin-top:8px"><button class="btn primary" style="width:100%;justify-content:center" onclick="saveDriveCfgThen('autoFolder')">Muksil 폴더 자동 연결</button></div>
-    <p class="help">폴더 선택이 API Key 오류로 막히면 <b>Muksil 폴더 자동 연결</b>을 쓰세요. Drive 최상위에 Muksil 폴더를 만들거나 기존 폴더를 찾아 연결합니다. Client ID·API Key·프로젝트 번호는 이 브라우저에만 저장돼요.</p>
+    <p class="help"><b>폴더 연결</b>을 누르면 Drive에 <b>Muksil</b> 폴더를 만들거나 찾아서 작업 폴더로 잡아요. 별도의 API Key 없이 Client ID 하나면 됩니다. Client ID는 이 브라우저에만 저장돼요.</p>
     ${connected?`<div style="margin-top:10px"><button class="btn danger" onclick="disconnectDrive()">연결 해제</button></div>`:''}
   </div>`;
 }
@@ -1018,8 +994,6 @@ function setCompo(key, val){
 function readCfgInputs(){
   const v=formVals();
   if('clientId' in v) cfg.clientId=v.clientId.trim();
-  if('apiKey' in v) cfg.apiKey=v.apiKey.trim();
-  if('appId' in v) cfg.appId=v.appId.trim();
   saveCfg();
 }
 async function saveDriveCfgThen(action){
@@ -1027,12 +1001,6 @@ async function saveDriveCfgThen(action){
   if(action==='connect'){
     const ok=await connectDrive().catch(e=>{toast(e.message,true);return false;});
     if(ok){ toast('드라이브 연결됨'); settingsContext==='drive' ? openDriveSettings() : openSettings(); }
-    return;
-  }
-  if(action==='folder'){
-    if(!gauth.token){ const ok=await connectDrive().catch(()=>false); if(!ok) return; }
-    const f=await pickDriveFolder();
-    if(f){ cfg.folderId=f.id; cfg.folderName=f.name; saveCfg(); driveDbFileId=null; toast('폴더 선택됨: '+f.name); settingsContext==='drive' ? openDriveSettings() : openSettings(); }
     return;
   }
   if(action==='autoFolder'){
@@ -1059,7 +1027,7 @@ function disconnectDrive(){
 }
 function openDriveStart(){
   // 시작화면의 'Google Drive로 작업하기'
-  if(!cfg.clientId || !cfg.apiKey || !cfg.appId){ openDriveSettings(); return; }
+  if(!cfg.clientId){ openDriveSettings(); return; }
   // 연결 → 폴더 확인 → 시작 옵션
   (async()=>{
     const ok = gauth.token || await connectDrive().catch(e=>{ toast(e.message||'드라이브 연결을 시작하지 못했어요.', true); return false; });
@@ -1076,7 +1044,7 @@ function driveStartOptions(){
   openModal(`<div class="modal-head"><h3>Google Drive</h3></div>
     <div class="modal-body">
       <div class="kv"><span>작업 폴더</span><span class="grow"><b style="color:var(--celadon)">${esc(cfg.folderName||'')}</b></span>
-        <button class="btn ghost" style="padding:4px 9px" onclick="changeStartFolder()">변경</button></div>
+        <button class="btn ghost" style="padding:4px 9px" onclick="changeStartFolder()">다시 연결</button></div>
       <div class="splash-actions" style="margin-top:8px">
         <button class="btn primary" onclick="closeModal();createNewDbOnDrive()">이 폴더에 새 집필 파일</button>
         <button class="btn ghost" onclick="closeModal();openDbFromDrive()">이 폴더에서 열기</button>
@@ -1085,7 +1053,8 @@ function driveStartOptions(){
     <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">닫기</button></div>`);
 }
 async function changeStartFolder(){
-  const f=await pickDriveFolder(); if(f){ cfg.folderId=f.id; cfg.folderName=f.name; saveCfg(); driveDbFileId=null; driveStartOptions(); }
+  const f=await useDefaultDriveFolder().catch(e=>{ toast('폴더 연결 실패: '+e.message, true); return null; });
+  if(f){ driveDbFileId=null; driveStartOptions(); }
 }
 
 function enterApp(){
