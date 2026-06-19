@@ -547,13 +547,13 @@ nav .navitem.active .count{color:var(--celadon)}
    ==================================================================== */
 "use strict";
 
-const APP_VERSION = 'v0.11.0';
-const APP_UPDATED = '2026-06-18';
+const APP_VERSION = 'v0.13.0';
+const APP_UPDATED = '2026-06-19';
 // ★ 기본 OAuth Client ID — 여기에 적어두면 모든 기기/브라우저에서 자동으로 채워져 재입력 불필요.
 //    Client ID는 비밀이 아닌 공개 식별자라 코드에 박아도 안전(로그인·동의는 각자 본인 구글 계정에서, 테스트 사용자만 통과).
 //    바꾸려면 이 한 줄만 수정. 비우면('') 예전처럼 설정에서 직접 입력.
 const DEFAULT_CLIENT_ID = '806316722531-74mhinip8crgs8frlmmk1g2q8skulam1.apps.googleusercontent.com';
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 10;
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS works(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -569,7 +569,9 @@ CREATE TABLE IF NOT EXISTS chapters(
   id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
   no INTEGER, title TEXT, content TEXT DEFAULT '',
   char_count INTEGER DEFAULT 0, char_count_ns INTEGER DEFAULT 0,
-  status TEXT DEFAULT '초고', memo TEXT,
+  status TEXT DEFAULT '초고', memo TEXT, scheduled_at TEXT,
+  ep_goal TEXT, ep_hook TEXT, ep_conflict TEXT, ep_next TEXT,
+  ep_cliff TEXT, ep_chars TEXT, ep_bait TEXT,
   published_at TEXT, created_at TEXT, updated_at TEXT
 );
 CREATE TABLE IF NOT EXISTS characters(
@@ -605,10 +607,24 @@ CREATE TABLE IF NOT EXISTS char_relations(
   id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
   char_id INTEGER, target_id INTEGER, target_name TEXT, relation TEXT, created_at TEXT
 );
+CREATE TABLE IF NOT EXISTS char_appearances(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
+  char_id INTEGER, chapter_id INTEGER, memo TEXT, created_at TEXT
+);
 CREATE TABLE IF NOT EXISTS plots(
   id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
   arc TEXT DEFAULT '본편', sort INTEGER DEFAULT 0, title TEXT, content TEXT,
   status TEXT DEFAULT '예정', created_at TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS baits(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
+  title TEXT, first_chapter TEXT, related TEXT, planned_chapter TEXT,
+  status TEXT DEFAULT '뿌림', visibility TEXT DEFAULT '보통',
+  content TEXT, created_at TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS terms(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
+  canonical TEXT, banned TEXT, note TEXT, created_at TEXT, updated_at TEXT
 );
 CREATE TABLE IF NOT EXISTS notes(
   id INTEGER PRIMARY KEY AUTOINCREMENT, work_id INTEGER,
@@ -621,6 +637,8 @@ CREATE TABLE IF NOT EXISTS writing_log(
 );
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 `;
+
+const CHAPTER_PLAN_COLS = ['scheduled_at','ep_goal','ep_hook','ep_conflict','ep_next','ep_cliff','ep_chars','ep_bait'];
 
 let SQL = null;        // sql.js 모듈
 let db = null;         // 메모리상의 DB (현재 열린 작품 1개)
@@ -698,6 +716,9 @@ function ensureSchema(){
   addCol('editor_lh', "ALTER TABLE works ADD COLUMN editor_lh INTEGER DEFAULT 205");
   addCol('editor_width', "ALTER TABLE works ADD COLUMN editor_width INTEGER DEFAULT 760");
   addCol('tl_mode', "ALTER TABLE works ADD COLUMN tl_mode TEXT DEFAULT 'date'");
+  // chapters 연재일정/회차 체크리스트 컬럼 보강
+  const chcols = new Set(all('PRAGMA table_info(chapters)').map(r=>r.name));
+  CHAPTER_PLAN_COLS.forEach(name=>{ if(!chcols.has(name)){ db.run(`ALTER TABLE chapters ADD COLUMN ${name} TEXT`); chcols.add(name); changed=true; } });
   // cats.color 보강(연표 유형 색)
   if(!new Set(all('PRAGMA table_info(cats)').map(r=>r.name)).has('color')){ db.run("ALTER TABLE cats ADD COLUMN color TEXT"); changed=true; }
   // characters 상세 프로필 컬럼 보강
@@ -1379,6 +1400,10 @@ const VIEWS = [
   {id:'lore',  label:'세계관·설정', icon:'M12 2l9 4.9V17L12 22 3 17V6.9L12 2zM12 22V12M3 7l9 5 9-5', count:'lo'},
   {id:'plot',  label:'플롯',    icon:'M9 5H5v14h14V9M9 5l6 6M9 5v6h6', count:'pl'},
   {id:'time',  label:'연표',    icon:'M12 7v5l3 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z', count:'tl'},
+  {id:'bait',  label:'떡밥',    icon:'M12 3l1.8 5.5H20l-5 3.7 1.9 5.8L12 14.5 7.1 18l1.9-5.8-5-3.7h6.2L12 3z', count:'ba'},
+  {id:'schedule', label:'연재일정', icon:'M7 3v4M17 3v4M4 8h16M5 5h14v16H5z', count:'sc'},
+  {id:'term',  label:'사전',    icon:'M4 5h8a4 4 0 014 4v10H8a4 4 0 00-4-4V5zM16 9h4v10h-4', count:'te'},
+  {id:'bible', label:'바이블',  icon:'M5 4h14v16H5zM8 8h8M8 12h8M8 16h5', count:null},
   {id:'note',  label:'메모',    icon:'M4 4h16v12l-4 4H4V4zM16 20v-4h4', count:'no'},
 ];
 
@@ -1400,6 +1425,9 @@ function updateNavCounts(){
     lo: one('SELECT COUNT(*) n FROM lore WHERE work_id=?',[w]).n,
     pl: one('SELECT COUNT(*) n FROM plots WHERE work_id=?',[w]).n,
     tl: one('SELECT COUNT(*) n FROM timeline WHERE work_id=?',[w]).n,
+    ba: one('SELECT COUNT(*) n FROM baits WHERE work_id=?',[w]).n,
+    sc: one("SELECT COUNT(*) n FROM chapters WHERE work_id=? AND scheduled_at IS NOT NULL AND scheduled_at<>''",[w]).n,
+    te: one('SELECT COUNT(*) n FROM terms WHERE work_id=?',[w]).n,
     no: one('SELECT COUNT(*) n FROM notes WHERE work_id=?',[w]).n,
   };
   $$('#nav .count').forEach(el=>{ const k=el.dataset.cnt; el.textContent = c[k]||''; });
@@ -1477,6 +1505,8 @@ const ATTACH_OWNERS = {
   chapter: {folder:'회차',     table:'chapters',   view:'write'},
   note:    {folder:'메모',     table:'notes',      view:'note'},
   timeline:{folder:'연표',     table:'timeline',   view:'time'},
+  bait:    {folder:'떡밥',     table:'baits',      view:'bait'},
+  term:    {folder:'사전',     table:'terms',      view:'term'},
   work:    {folder:'작품',     table:'works',      view:'dash'},
 };
 function assetRoot(){ return titleFromFile(currentFilename()); }   // 현재 작품 제목 폴더
@@ -1627,7 +1657,7 @@ function delEntity(ownerType, id){
   const m=ATTACH_OWNERS[ownerType];
   (async()=>{
     try{ await attachDeleteFor(ownerType, id); }catch(e){}
-    if(ownerType==='char') run('DELETE FROM char_relations WHERE work_id=? AND (char_id=? OR target_id=?)',[state.workId,id,id]);
+    if(ownerType==='char'){ run('DELETE FROM char_relations WHERE work_id=? AND (char_id=? OR target_id=?)',[state.workId,id,id]); run('DELETE FROM char_appearances WHERE work_id=? AND char_id=?',[state.workId,id]); }
     run(`DELETE FROM ${m.table} WHERE id=?`,[id]);
     closeModal(); go(m.view);
   })();
@@ -1703,7 +1733,7 @@ function deleteWork(id){
    ==================================================================== */
 const RENDER = {};
 RENDER.dash = ()=>{
-  $('#topActions').innerHTML = `${state.workId?`<button class="btn ghost" onclick="openWorkForm(${state.workId})">작품 수정</button>`:''}<button class="btn primary" onclick="openWorkForm()">＋ 새 작품</button>`;
+  $('#topActions').innerHTML = `${state.workId?`<button class="btn ghost" onclick="exportManuscript()">원고 내보내기</button><button class="btn ghost" onclick="openWorkForm(${state.workId})">작품 수정</button>`:''}<button class="btn primary" onclick="openWorkForm()">＋ 새 작품</button>`;
   if(!state.workId){
     $('#view').innerHTML = emptyState('아직 작품이 없어요','첫 작품을 만들면 회차·인물·세계관을 한곳에서 관리할 수 있어요.','새 작품 만들기','openWorkForm()');
     return;
@@ -1823,7 +1853,8 @@ function renderChapterList(){
   const countCol = workUsesNoSpace() ? 'char_count_ns' : 'char_count';
   const acnt={}; all("SELECT owner_id, COUNT(*) n FROM attachments WHERE work_id=? AND owner_type='chapter' GROUP BY owner_id",[state.workId]).forEach(r=>acnt[r.owner_id]=r.n);
   $('#chapScroll').innerHTML = rows.length ? rows.map(c=>{
-    const marks = `${c.memo&&c.memo.trim()?'<span class="chap-mark" title="메모">📝</span>':''}${acnt[c.id]?`<span class="chap-mark" title="첨부 ${acnt[c.id]}">📎${acnt[c.id]}</span>`:''}`;
+    const hasPlan = ['ep_goal','ep_hook','ep_conflict','ep_next','ep_cliff','ep_chars','ep_bait'].some(k=>c[k]&&String(c[k]).trim());
+    const marks = `${c.scheduled_at?`<span class="chap-mark" title="발행 예정 ${esc(c.scheduled_at)}">🗓</span>`:''}${hasPlan?'<span class="chap-mark" title="회차 체크리스트">✅</span>':''}${c.memo&&c.memo.trim()?'<span class="chap-mark" title="메모">📝</span>':''}${acnt[c.id]?`<span class="chap-mark" title="첨부 ${acnt[c.id]}">📎${acnt[c.id]}</span>`:''}`;
     return `<div class="chap-item ${c.id===state.chapterId?'active':''}" onclick="openChapter(${c.id})">
       <div class="t"><span class="no">${c.no}화</span><span class="ti">${c.title?esc(c.title):'무제'}</span>${marks}</div>
       <div class="m"><span>${fmt(c[countCol])}자</span><span class="chip ${c.status==='발행'?'celadon':c.status==='퇴고'?'amber':''}" style="padding:1px 7px">${esc(c.status)}</span></div>
@@ -1857,6 +1888,9 @@ function openChapter(id){
       </div>
       <div class="ed-meta">
         <select id="edStatus">${['초고','퇴고','발행'].map(s=>`<option ${s===c.status?'selected':''}>${s}</option>`).join('')}</select>
+        <button class="btn ghost" style="padding:5px 10px" onclick="openQuickRef()">참조</button>
+        <button class="btn ghost" style="padding:5px 10px" onclick="chapterTail(${id})">말미</button>
+        <button class="btn ghost" style="padding:5px 10px" onclick="chapterChecklist(${id})">체크</button>
         <button class="btn ghost" style="padding:5px 10px" onclick="chapterMemo(${id})">메모</button>
         <button class="btn ghost" style="padding:5px 10px" onclick="openChapterAttach(${id})">📎 첨부</button>
         <button class="btn danger" style="padding:5px 10px" onclick="deleteChapter(${id})">삭제</button>
@@ -1915,7 +1949,7 @@ function saveChapter(silent){
 
 function deleteChapter(id){
   if(!confirm('이 회차를 삭제할까요? 첨부도 함께 삭제됩니다.')) return;
-  (async()=>{ try{ await attachDeleteFor('chapter', id); }catch(e){} run('DELETE FROM chapters WHERE id=?',[id]); state.chapterId=null; RENDER.write(); })();
+  (async()=>{ try{ await attachDeleteFor('chapter', id); }catch(e){} run('DELETE FROM char_appearances WHERE work_id=? AND chapter_id=?',[state.workId,id]); run('DELETE FROM chapters WHERE id=?',[id]); state.chapterId=null; RENDER.write(); })();
 }
 function openChapterAttach(id){
   const c=one('SELECT no,title FROM chapters WHERE id=?',[id])||{};
@@ -1924,12 +1958,94 @@ function openChapterAttach(id){
     <div class="modal-foot"><button class="btn primary" onclick="closeModal()">닫기</button></div>`);
 }
 
+function splitNames(s){ return String(s||'').split(/[,，、\n\/]+/).map(x=>x.trim()).filter(Boolean); }
+function syncChapterAppearances(chapterId, names, memo=''){
+  run('DELETE FROM char_appearances WHERE work_id=? AND chapter_id=?',[state.workId,chapterId]);
+  splitNames(names).forEach(n=>{
+    const c=one('SELECT id FROM characters WHERE work_id=? AND name=?',[state.workId,n]);
+    if(c) insert('INSERT INTO char_appearances(work_id,char_id,chapter_id,memo,created_at) VALUES(?,?,?,?,?)',[state.workId,c.id,chapterId,memo,now()]);
+  });
+}
+function chapterTail(id){
+  const c=one('SELECT no,title,content,ep_cliff,ep_next FROM chapters WHERE id=?',[id]); if(!c) return;
+  const text=String(c.content||'');
+  const paras=text.split(/\n\s*\n/).map(x=>x.trim()).filter(Boolean);
+  const lastPara=paras[paras.length-1]||'';
+  const tail=text.slice(Math.max(0,text.length-500));
+  const dialog=(text.match(/[“"']?[^\n“"']+[”"']?/g)||[]).filter(x=>/["“”']/.test(x)).slice(-5).join('\n');
+  openModal(`<div class="modal-head"><h3>${esc(c.no)}화 말미 점검</h3><button class="icon-x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="cv-group"><div class="cv-gtitle">마지막 500자</div><p class="cv-v">${esc(tail||'본문이 아직 없어요.')}</p></div>
+      <div class="cv-group"><div class="cv-gtitle">마지막 문단</div><p class="cv-v">${esc(lastPara||'문단이 아직 없어요.')}</p></div>
+      <div class="cv-group"><div class="cv-gtitle">마지막 대사 후보</div><p class="cv-v">${esc(dialog||'대사 후보가 없어요.')}</p></div>
+      <div class="cv-group"><div class="cv-gtitle">다음 화 유도 메모</div><p class="cv-v">${esc(c.ep_next||'체크리스트의 다음 화 유도 항목을 채워보세요.')}</p></div>
+      <div class="cv-group"><div class="cv-gtitle">클리프행어 메모</div><p class="cv-v">${esc(c.ep_cliff||'체크리스트의 클리프행어 항목을 채워보세요.')}</p></div>
+    </div><div class="modal-foot"><button class="btn ghost" onclick="chapterChecklist(${id})">체크 수정</button><button class="btn primary" onclick="closeModal()">닫기</button></div>`);
+}
+function openQuickRef(){
+  if(!state.workId){ toast('작품을 먼저 여세요', true); return; }
+  const chars=all('SELECT id,name,role,oneliner,speech_habit,speech_samples FROM characters WHERE work_id=? ORDER BY role,id LIMIT 8',[state.workId]);
+  const lore=all('SELECT id,title,category,content FROM lore WHERE work_id=? ORDER BY id DESC LIMIT 6',[state.workId]);
+  const baits=all("SELECT id,title,status,planned_chapter,content FROM baits WHERE work_id=? AND status<>'회수' ORDER BY id DESC LIMIT 6",[state.workId]);
+  const term=all('SELECT canonical,banned,note FROM terms WHERE work_id=? ORDER BY id DESC LIMIT 6',[state.workId]);
+  openModal(`<div class="modal-head"><h3>빠른 참조</h3><button class="icon-x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="field"><input id="quickRefInput" placeholder="인물·설정·떡밥·사전 검색" oninput="runQuickRef(this.value)" autocomplete="off"></div><div id="quickRefResults"></div>
+      <div class="cv-group"><div class="cv-gtitle">최근 인물</div>${chars.map(c=>`<div class="cv-row"><span class="cv-k">${esc(c.name)}</span><span class="cv-v">${esc(c.role||'')}${c.oneliner?' · '+esc(c.oneliner):''}${c.speech_habit?' · '+esc(c.speech_habit):''}</span></div>`).join('')||'<p class="help">인물이 없어요.</p>'}</div>
+      <div class="cv-group"><div class="cv-gtitle">최근 설정</div>${lore.map(l=>`<div class="cv-row"><span class="cv-k">${esc(l.title||'무제')}</span><span class="cv-v">${esc((l.content||'').slice(0,90))}</span></div>`).join('')||'<p class="help">설정이 없어요.</p>'}</div>
+      <div class="cv-group"><div class="cv-gtitle">미회수 떡밥</div>${baits.map(b=>`<div class="cv-row"><span class="cv-k">${esc(b.title)}</span><span class="cv-v">${esc(b.status||'')} ${b.planned_chapter?'· '+esc(b.planned_chapter):''}</span></div>`).join('')||'<p class="help">미회수 떡밥이 없어요.</p>'}</div>
+      <div class="cv-group"><div class="cv-gtitle">표기 사전</div>${term.map(t=>`<div class="cv-row"><span class="cv-k">${esc(t.canonical)}</span><span class="cv-v">${t.banned?'금지: '+esc(t.banned):esc(t.note||'')}</span></div>`).join('')||'<p class="help">사전 항목이 없어요.</p>'}</div>
+    </div><div class="modal-foot"><button class="btn primary" onclick="closeModal()">닫기</button></div>`);
+}
+function runQuickRef(q){
+  q=(q||'').trim(); const box=$('#quickRefResults'); if(!box) return;
+  if(q.length<2){ box.innerHTML=''; return; }
+  const like='%'+q+'%';
+  const rows=[];
+  all('SELECT "인물" kind, id, name title, oneliner body FROM characters WHERE work_id=? AND (name LIKE ? OR oneliner LIKE ? OR detail LIKE ?) LIMIT 5',[state.workId,like,like,like]).forEach(r=>rows.push(r));
+  all('SELECT "설정" kind, id, title, content body FROM lore WHERE work_id=? AND (title LIKE ? OR content LIKE ?) LIMIT 5',[state.workId,like,like]).forEach(r=>rows.push(r));
+  all('SELECT "떡밥" kind, id, title, content body FROM baits WHERE work_id=? AND (title LIKE ? OR related LIKE ? OR content LIKE ?) LIMIT 5',[state.workId,like,like,like]).forEach(r=>rows.push(r));
+  all('SELECT "사전" kind, id, canonical title, note body FROM terms WHERE work_id=? AND (canonical LIKE ? OR banned LIKE ? OR note LIKE ?) LIMIT 5',[state.workId,like,like,like]).forEach(r=>rows.push(r));
+  box.innerHTML=rows.length?`<div class="cv-group"><div class="cv-gtitle">검색 결과</div>${rows.map(r=>`<div class="cv-row"><span class="cv-k">${esc(r.kind)}</span><span class="cv-v"><b>${esc(r.title||'무제')}</b>${r.body?' · '+esc(String(r.body).slice(0,80)):''}</span></div>`).join('')}</div>`:'<p class="help">결과가 없어요.</p>';
+}
+function downloadText(name, text){ const blob=new Blob([text],{type:'text/plain;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+function exportManuscript(){
+  if(!state.workId){ toast('작품을 먼저 여세요', true); return; }
+  const w=one('SELECT title,count_no_space FROM works WHERE id=?',[state.workId]);
+  const rows=all('SELECT no,title,content,char_count,char_count_ns FROM chapters WHERE work_id=? ORDER BY no',[state.workId]);
+  if(!rows.length){ toast('내보낼 회차가 없어요', true); return; }
+  const body=rows.map(c=>`${c.no}화 ${c.title||'무제'}\n\n${c.content||''}`).join('\n\n---\n\n');
+  const total=rows.reduce((s,c)=>s+(w.count_no_space===0?(c.char_count||0):(c.char_count_ns||0)),0);
+  downloadText(`${sanitizeName(w.title||'원고')}_합본.txt`, `${w.title||'원고'}\n총 ${fmt(total)}자\n\n${body}`);
+  toast('TXT로 내보냈어요');
+}
 function chapterMemo(id){
   const c=one('SELECT memo FROM chapters WHERE id=?',[id]);
   openModal(`<div class="modal-head"><h3>회차 메모</h3></div>
     <div class="modal-body">${field('이 회차에 대한 메모 (복선, 수정사항 등)','memo',c.memo,'textarea')}</div>
     <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">취소</button>
     <button class="btn primary" onclick="run('UPDATE chapters SET memo=? WHERE id=?',[formVals().memo,${id}]);closeModal();toast('메모 저장')">저장</button></div>`);
+}
+function chapterChecklist(id){
+  const c=one('SELECT * FROM chapters WHERE id=?',[id])||{};
+  openModal(`<div class="modal-head"><h3>${esc(c.no)}화 체크리스트</h3><button class="icon-x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      ${field('이번 화 목표','ep_goal',c.ep_goal,'textarea')}
+      ${field('후킹 문장·초반 끌림','ep_hook',c.ep_hook,'textarea')}
+      ${field('갈등·사건','ep_conflict',c.ep_conflict,'textarea')}
+      ${field('다음 화로 넘길 이유','ep_next',c.ep_next,'textarea')}
+      ${field('마지막 문단·클리프행어','ep_cliff',c.ep_cliff,'textarea')}
+      ${field('등장 인물','ep_chars',c.ep_chars,'textarea')}
+      ${field('새로 뿌릴/회수할 떡밥','ep_bait',c.ep_bait,'textarea')}
+    </div>
+    <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">취소</button><button class="btn primary" onclick="saveChapterChecklist(${id})">저장</button></div>`);
+}
+function saveChapterChecklist(id){
+  const v=formVals();
+  run('UPDATE chapters SET ep_goal=?,ep_hook=?,ep_conflict=?,ep_next=?,ep_cliff=?,ep_chars=?,ep_bait=?,updated_at=? WHERE id=?',
+    [v.ep_goal,v.ep_hook,v.ep_conflict,v.ep_next,v.ep_cliff,v.ep_chars,v.ep_bait,now(),id]);
+  syncChapterAppearances(id, v.ep_chars, v.ep_bait);
+  closeModal(); if($("#chapScroll")) renderChapterList(); toast('체크 저장');
 }
 
 /* ====================================================================
@@ -1938,10 +2054,11 @@ function chapterMemo(id){
 function castCard(c, colors){
   const col = (colors&&colors[c.role]) || 'var(--celadon)';
   const pid = charPortrait(c.id);
+  const last = one('SELECT ch.no no, ch.title title FROM char_appearances ca JOIN chapters ch ON ch.id=ca.chapter_id WHERE ca.work_id=? AND ca.char_id=? ORDER BY ch.no DESC LIMIT 1',[state.workId,c.id]);
   const av = pid ? `<div class="av av-photo"><img data-aimg="${pid}" alt=""></div>` : `<div class="av" style="background:${col}">${esc((c.name||'?').slice(0,1))}</div>`;
   return `<div class="card entity" style="border-left:4px solid ${col}" onclick="openCastView(${c.id})">
     <div class="top">${av}
-      <div><h4>${esc(c.name||'무명')}${attBadge('char',c.id)}</h4><div class="role">${esc(c.role)}</div></div></div>
+      <div><h4>${esc(c.name||'무명')}${attBadge('char',c.id)}</h4><div class="role">${esc(c.role)}${last?' · 마지막 '+esc(last.no)+'화':''}</div></div></div>
     <p>${c.oneliner?esc(c.oneliner):'<span style="opacity:.5">한 줄 설정을 적어보세요</span>'}</p>
   </div>`;
 }
@@ -2061,10 +2178,12 @@ function openCastView(id){
   }).join('');
   const out = all('SELECT target_name,relation FROM char_relations WHERE work_id=? AND char_id=? ORDER BY id',[state.workId,id]);
   const inc = all("SELECT cr.relation rel, c.name src FROM char_relations cr JOIN characters c ON c.id=cr.char_id WHERE cr.work_id=? AND cr.target_id=? ORDER BY cr.id",[state.workId,id]);
+  const apps = all('SELECT ch.no no,ch.title title,ca.memo memo FROM char_appearances ca JOIN chapters ch ON ch.id=ca.chapter_id WHERE ca.work_id=? AND ca.char_id=? ORDER BY ch.no',[state.workId,id]);
+  const appHtml = apps.length ? `<div class="cv-group"><div class="cv-gtitle">등장 회차</div>${apps.map(a=>`<div class="cv-row"><span class="cv-k">${esc(a.no)}화</span><span class="cv-v">${esc(a.title||'무제')}${a.memo?' · '+esc(a.memo):''}</span></div>`).join('')}</div>` : '';
   const relHtml = (out.length||inc.length) ? `<div class="cv-group"><div class="cv-gtitle">관계</div>
     ${out.map(r=>`<div class="cv-row"><span class="cv-k">${esc(r.target_name||'?')}</span><span class="cv-v">${esc(r.relation||'')}</span></div>`).join('')}
     ${inc.map(r=>`<div class="cv-row"><span class="cv-k">← ${esc(r.src)}</span><span class="cv-v">${esc(r.rel||'')}</span></div>`).join('')}</div>` : '';
-  const body = groups+relHtml+attViewHtml('char',id);
+  const body = groups+appHtml+relHtml+attViewHtml('char',id);
   openModal(`<div class="modal-head"><h3>${esc(c.name||'무명')}</h3><button class="icon-x" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
       <div class="cv-hero">
@@ -2415,6 +2534,163 @@ function timeMove(id, dir){
 }
 
 /* ====================================================================
+   떡밥
+   ==================================================================== */
+const BAIT_STATUS = ['뿌림','강화','회수','폐기'];
+const BAIT_VIS = ['약함','보통','노골적'];
+function baitChip(status){ return status==='회수'?'celadon':status==='강화'?'amber':status==='폐기'?'rust':''; }
+RENDER.bait = ()=>{
+  if(!state.workId){ $('#view').innerHTML=emptyState('작품을 먼저 만들어주세요','',''); return; }
+  $('#topActions').innerHTML=`<button class="btn primary" onclick="openBaitForm()">＋ 떡밥 추가</button>`;
+  const rows=all("SELECT * FROM baits WHERE work_id=? ORDER BY CASE status WHEN '뿌림' THEN 0 WHEN '강화' THEN 1 WHEN '회수' THEN 2 ELSE 3 END, id DESC",[state.workId]);
+  $('#view').innerHTML=`<div class="view-inner">${rows.length?`<div class="cards">${rows.map(b=>`
+    <div class="card entity" onclick="openBaitForm(${b.id})">
+      <h4 style="margin-bottom:7px">${esc(b.title||'무제')}${attBadge('bait',b.id)}</h4>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <span class="chip ${baitChip(b.status)}">${esc(b.status||'뿌림')}</span><span class="chip">눈치 ${esc(b.visibility||'보통')}</span>
+        ${b.first_chapter?`<span class="chip">첫등장 ${esc(b.first_chapter)}</span>`:''}${b.planned_chapter?`<span class="chip">회수예정 ${esc(b.planned_chapter)}</span>`:''}
+      </div>
+      <p>${esc(b.content||b.related||'')}</p>
+    </div>`).join('')}</div>`:emptyState('떡밥이 없어요','뿌린 복선, 강화할 단서, 회수 예정 회차를 따로 잡아두면 장편 연재가 덜 흔들려요.','첫 떡밥 추가','openBaitForm()')}</div>`;
+};
+function openBaitForm(id){
+  const b=id?one('SELECT * FROM baits WHERE id=?',[id]):{};
+  openModal(`<div class="modal-head"><h3>${id?'떡밥 수정':'새 떡밥'}</h3><button class="icon-x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      ${field('떡밥 이름','title',b.title)}
+      <div class="field-row">${field('상태','status',b.status||'뿌림','select',BAIT_STATUS)}${field('독자가 눈치챌 정도','visibility',b.visibility||'보통','select',BAIT_VIS)}</div>
+      <div class="field-row">${field('처음 등장 회차','first_chapter',b.first_chapter||'')}${field('회수 예정 회차','planned_chapter',b.planned_chapter||'')}</div>
+      ${field('관련 인물·설정','related',b.related||'')}
+      ${field('내용·회수 메모','content',b.content,'textarea')}
+      ${attachmentsSectionHtml('bait', id)}
+    </div>
+    <div class="modal-foot">${id?`<button class="btn danger" onclick="delEntity('bait',${id})">삭제</button>`:''}<button class="btn ghost" onclick="closeModal()">취소</button><button class="btn primary" onclick="saveBait(${id||0})">저장</button></div>`);
+}
+function saveBait(id){
+  const v=formVals();
+  if(!(v.title||'').trim()){ toast('떡밥 이름을 입력해주세요', true); return; }
+  if(id) run('UPDATE baits SET title=?,status=?,visibility=?,first_chapter=?,planned_chapter=?,related=?,content=?,updated_at=? WHERE id=?',[v.title,v.status,v.visibility,v.first_chapter,v.planned_chapter,v.related,v.content,now(),id]);
+  else insert('INSERT INTO baits(work_id,title,status,visibility,first_chapter,planned_chapter,related,content,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',[state.workId,v.title,v.status,v.visibility,v.first_chapter,v.planned_chapter,v.related,v.content,now(),now()]);
+  closeModal(); go('bait'); toast('저장했어요');
+}
+
+/* ====================================================================
+   연재일정
+   ==================================================================== */
+function scheduleRows(){ return all("SELECT * FROM chapters WHERE work_id=? ORDER BY CASE WHEN scheduled_at IS NULL OR scheduled_at='' THEN 1 ELSE 0 END, scheduled_at, no",[state.workId]); }
+function scheduleStats(rows){
+  const today=todayStr();
+  return {
+    planned: rows.filter(r=>r.scheduled_at).length,
+    overdue: rows.filter(r=>r.scheduled_at && r.scheduled_at<today && r.status!=='발행').length,
+    reserve: rows.filter(r=>(r.char_count_ns||r.char_count)>0 && r.status!=='발행').length,
+  };
+}
+RENDER.schedule = ()=>{
+  if(!state.workId){ $('#view').innerHTML=emptyState('작품을 먼저 만들어주세요','',''); return; }
+  $('#topActions').innerHTML=`<button class="btn primary" onclick="openScheduleForm()">＋ 일정 잡기</button>`;
+  const rows=scheduleRows(); const st=scheduleStats(rows);
+  const body = rows.length ? `<div class="card">${rows.map(c=>`
+    <div class="list-row" onclick="openScheduleForm(${c.id})">
+      <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13.5px">${c.no}화 ${esc(c.title||'무제')}</div>
+      <div style="font-size:12px;color:var(--mute);margin-top:3px">${c.scheduled_at?`발행 예정 ${esc(c.scheduled_at)}`:'일정 없음'} · ${fmt(workUsesNoSpace()?c.char_count_ns:c.char_count)}자</div></div>
+      <span class="chip ${c.status==='발행'?'celadon':c.status==='퇴고'?'amber':''}">${esc(c.status||'초고')}</span>
+    </div>`).join('')}</div>` : emptyState('회차가 없어요','집필 화면에서 회차를 만들면 발행 예정일을 잡을 수 있어요.','회차 만들기',"go('write')");
+  $('#view').innerHTML=`<div class="view-inner">
+    <div class="metrics" style="margin-bottom:16px">
+      <div class="metric"><div class="n accent">${fmt(st.planned)}</div><div class="l">일정 잡힌 회차</div></div>
+      <div class="metric"><div class="n ${st.reserve<3?'accent':''}">${fmt(st.reserve)}</div><div class="l">비축 후보</div></div>
+      <div class="metric"><div class="n ${st.overdue?'accent':''}">${fmt(st.overdue)}</div><div class="l">지난 미발행</div></div>
+    </div>${body}</div>`;
+};
+function openScheduleForm(id){
+  const rows=all('SELECT id,no,title,scheduled_at,status FROM chapters WHERE work_id=? ORDER BY no',[state.workId]);
+  if(!rows.length){ toast('먼저 회차를 만들어주세요', true); return; }
+  const c=id?one('SELECT * FROM chapters WHERE id=?',[id]):rows[0];
+  openModal(`<div class="modal-head"><h3>연재일정</h3><button class="icon-x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="field"><label>회차</label><select name="chapter_id">${rows.map(r=>`<option value="${r.id}" ${r.id===c.id?'selected':''}>${r.no}화 ${esc(r.title||'무제')}</option>`).join('')}</select></div>
+      <div class="field-row">${field('발행 예정일','scheduled_at',c.scheduled_at||'','date')}${field('상태','status',c.status||'초고','select',['초고','퇴고','발행'])}</div>
+      <p class="help">발행으로 바꾸면 최초 발행 시각도 함께 기록돼요. 예정일을 비우면 일정에서 미정으로 표시돼요.</p>
+    </div>
+    <div class="modal-foot"><button class="btn ghost" onclick="clearSchedule()">일정 비우기</button><button class="btn ghost" onclick="closeModal()">취소</button><button class="btn primary" onclick="saveSchedule()">저장</button></div>`);
+}
+function saveSchedule(){
+  const v=formVals(); const id=+v.chapter_id;
+  run("UPDATE chapters SET scheduled_at=?,status=?,updated_at=?,published_at=CASE WHEN ?='발행' AND published_at IS NULL THEN ? ELSE published_at END WHERE id=?",[v.scheduled_at||'',v.status,now(),v.status,now(),id]);
+  closeModal(); go('schedule'); toast('일정 저장');
+}
+function clearSchedule(){
+  const v=formVals(); const id=+v.chapter_id;
+  run('UPDATE chapters SET scheduled_at=?,updated_at=? WHERE id=?',['',now(),id]);
+  closeModal(); go('schedule'); toast('일정 비움');
+}
+/* ====================================================================
+   표기 사전
+   ==================================================================== */
+RENDER.term = ()=>{
+  if(!state.workId){ $('#view').innerHTML=emptyState('작품을 먼저 만들어주세요','',''); return; }
+  $('#topActions').innerHTML=`<button class="btn ghost" onclick="scanTerms()">표기 검사</button><button class="btn primary" onclick="openTermForm()">＋ 항목 추가</button>`;
+  const rows=all('SELECT * FROM terms WHERE work_id=? ORDER BY canonical,id',[state.workId]);
+  $('#view').innerHTML=`<div class="view-inner">${rows.length?`<div class="card">${rows.map(t=>`
+    <div class="list-row" onclick="openTermForm(${t.id})"><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13.5px">${esc(t.canonical||'무제')}${attBadge('term',t.id)}</div>
+    <div style="font-size:12px;color:var(--mute);margin-top:3px">${t.banned?'금지: '+esc(t.banned):esc(t.note||'')}</div></div></div>`).join('')}</div>`:emptyState('표기 사전이 비어 있어요','기술명, 호칭, 금지 표기를 모아두면 장편 퇴고가 편해져요.','첫 항목 추가','openTermForm()')}</div>`;
+};
+function openTermForm(id){
+  const t=id?one('SELECT * FROM terms WHERE id=?',[id]):{};
+  openModal(`<div class="modal-head"><h3>${id?'사전 수정':'새 사전 항목'}</h3><button class="icon-x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      ${field('표준 표기','canonical',t.canonical)}
+      ${field('금지 표기(쉼표로 구분)','banned',t.banned)}
+      ${field('호칭·사용 메모','note',t.note,'textarea')}
+      ${attachmentsSectionHtml('term', id)}
+    </div><div class="modal-foot">${id?`<button class="btn danger" onclick="delEntity('term',${id})">삭제</button>`:''}<button class="btn ghost" onclick="closeModal()">취소</button><button class="btn primary" onclick="saveTerm(${id||0})">저장</button></div>`);
+}
+function saveTerm(id){
+  const v=formVals(); if(!(v.canonical||'').trim()){ toast('표준 표기를 입력해주세요', true); return; }
+  if(id) run('UPDATE terms SET canonical=?,banned=?,note=?,updated_at=? WHERE id=?',[v.canonical,v.banned,v.note,now(),id]);
+  else insert('INSERT INTO terms(work_id,canonical,banned,note,created_at,updated_at) VALUES(?,?,?,?,?,?)',[state.workId,v.canonical,v.banned,v.note,now(),now()]);
+  closeModal(); go('term'); toast('저장했어요');
+}
+function scanTerms(){
+  const terms=all('SELECT * FROM terms WHERE work_id=?',[state.workId]);
+  const chapters=all('SELECT no,title,content FROM chapters WHERE work_id=? ORDER BY no',[state.workId]);
+  const hits=[];
+  terms.forEach(t=>splitNames(t.banned).forEach(b=>{ chapters.forEach(c=>{ if(b && String(c.content||'').includes(b)) hits.push({bad:b, good:t.canonical, no:c.no, title:c.title}); }); }));
+  openModal(`<div class="modal-head"><h3>표기 검사</h3><button class="icon-x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">${hits.length?`<div class="card">${hits.map(h=>`<div class="list-row"><div style="flex:1"><b>${esc(h.bad)}</b> → ${esc(h.good||'표준 표기')}<div style="font-size:12px;color:var(--mute)">${h.no}화 ${esc(h.title||'무제')}</div></div></div>`).join('')}</div>`:'<p class="help">등록된 금지 표기가 원고에서 발견되지 않았어요.</p>'}</div>
+    <div class="modal-foot"><button class="btn primary" onclick="closeModal()">닫기</button></div>`);
+}
+
+/* ====================================================================
+   작품 바이블
+   ==================================================================== */
+RENDER.bible = ()=>{
+  if(!state.workId){ $('#view').innerHTML=emptyState('작품을 먼저 만들어주세요','',''); return; }
+  $('#topActions').innerHTML=`<button class="btn ghost" onclick="exportBible()">TXT 저장</button>`;
+  const w=one('SELECT * FROM works WHERE id=?',[state.workId]);
+  const chars=all('SELECT * FROM characters WHERE work_id=? ORDER BY role,id LIMIT 12',[state.workId]);
+  const lore=all('SELECT * FROM lore WHERE work_id=? ORDER BY category,id LIMIT 12',[state.workId]);
+  const plots=all('SELECT * FROM plots WHERE work_id=? ORDER BY arc,sort,id LIMIT 12',[state.workId]);
+  const baits=all("SELECT * FROM baits WHERE work_id=? AND status<>'회수' ORDER BY id LIMIT 12",[state.workId]);
+  $('#view').innerHTML=`<div class="view-inner">
+    <div class="card work-hero"><div class="genre">${esc(w.genre||'장르 미정')} · ${esc(w.platform||'연재처 미정')}</div><h2>${esc(w.title||'무제')}</h2><p class="logline">${esc(w.logline||'로그라인 없음')}</p>${w.synopsis?`<div class="synopsis-body">${esc(w.synopsis)}</div>`:''}</div>
+    <div class="cv-group"><div class="cv-gtitle">주요 인물</div>${chars.map(c=>`<div class="cv-row"><span class="cv-k">${esc(c.name)}</span><span class="cv-v">${esc(c.role||'')} · ${esc(c.oneliner||c.desire||'')}</span></div>`).join('')||'<p class="help">인물이 없어요.</p>'}</div>
+    <div class="cv-group"><div class="cv-gtitle">핵심 설정</div>${lore.map(l=>`<div class="cv-row"><span class="cv-k">${esc(l.title||'무제')}</span><span class="cv-v">${esc((l.content||'').slice(0,140))}</span></div>`).join('')||'<p class="help">설정이 없어요.</p>'}</div>
+    <div class="cv-group"><div class="cv-gtitle">플롯</div>${plots.map(p=>`<div class="cv-row"><span class="cv-k">${esc(p.arc||'본편')}</span><span class="cv-v"><b>${esc(p.title||'무제')}</b> · ${esc((p.content||'').slice(0,140))}</span></div>`).join('')||'<p class="help">플롯이 없어요.</p>'}</div>
+    <div class="cv-group"><div class="cv-gtitle">미회수 떡밥</div>${baits.map(b=>`<div class="cv-row"><span class="cv-k">${esc(b.title)}</span><span class="cv-v">${esc(b.status||'')} · ${esc(b.planned_chapter||'회수 미정')}</span></div>`).join('')||'<p class="help">미회수 떡밥이 없어요.</p>'}</div>
+  </div>`;
+};
+function bibleText(){
+  const w=one('SELECT * FROM works WHERE id=?',[state.workId]);
+  const parts=[`# ${w.title||'무제'}`, '', `로그라인: ${w.logline||''}`, '', w.synopsis||''];
+  parts.push('\n## 주요 인물'); all('SELECT name,role,oneliner,desire FROM characters WHERE work_id=? ORDER BY role,id',[state.workId]).forEach(c=>parts.push(`- ${c.name} (${c.role||''}): ${c.oneliner||c.desire||''}`));
+  parts.push('\n## 플롯'); all('SELECT arc,title,content FROM plots WHERE work_id=? ORDER BY arc,sort,id',[state.workId]).forEach(p=>parts.push(`- [${p.arc||'본편'}] ${p.title||'무제'}: ${p.content||''}`));
+  parts.push('\n## 미회수 떡밥'); all("SELECT title,status,planned_chapter,content FROM baits WHERE work_id=? AND status<>'회수' ORDER BY id",[state.workId]).forEach(b=>parts.push(`- ${b.title} (${b.status||''}/${b.planned_chapter||'미정'}): ${b.content||''}`));
+  return parts.join('\n');
+}
+function exportBible(){ const w=one('SELECT title FROM works WHERE id=?',[state.workId]); downloadText(`${sanitizeName(w.title||'작품')}_바이블.txt`, bibleText()); toast('바이블 저장'); }
+/* ====================================================================
    메모
    ==================================================================== */
 RENDER.note = ()=>{
@@ -2459,6 +2735,8 @@ const SEARCH_DEFS=[
   {type:'chapter',  label:'회차',     cols:['title','content'], title:'title'},
   {type:'note',     label:'메모',     cols:['title','content'], title:'title'},
   {type:'timeline', label:'연표',     cols:['title','detail'],  title:'title'},
+  {type:'bait',     label:'떡밥',     cols:['title','related','content'], title:'title'},
+  {type:'term',     label:'사전',     cols:['canonical','banned','note'], title:'canonical'},
 ];
 function openSearch(){
   if(!state.workId){ toast('작품을 먼저 여세요', true); return; }
@@ -2499,6 +2777,8 @@ function searchGo(type, id){
   else if(type==='plot') openPlotForm(id);
   else if(type==='note') openNoteForm(id);
   else if(type==='timeline') openTimeForm(id);
+  else if(type==='bait') openBaitForm(id);
+  else if(type==='term') openTermForm(id);
   else if(type==='chapter') openChapter(id);
 }
 
